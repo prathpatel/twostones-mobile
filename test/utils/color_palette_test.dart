@@ -136,35 +136,6 @@ void main() {
       }
     });
 
-    test('derives the board colors from the core palette', () async {
-      for (final corePalette in sampleCorePalettes) {
-        DynamicColorTestingUtils.setMockDynamicColors(corePalette: corePalette);
-
-        await loadSystemColors();
-
-        final boardColors = getBoardColorScheme();
-        expect(boardColors, isNotNull);
-        expect(boardColors!.darkSquare, material.Color(corePalette.secondary.get(60)));
-        expect(boardColors.lightSquare, material.Color(corePalette.primary.get(95)));
-        expect(
-          boardColors.lastMove.solidColor,
-          material.Color(corePalette.tertiary.get(80)).withValues(alpha: 0.6),
-        );
-        expect(
-          boardColors.selected.solidColor,
-          material.Color(corePalette.neutral.get(40)).withValues(alpha: 0.80),
-        );
-        expect(
-          boardColors.validMoves,
-          material.Color(corePalette.neutral.get(40)).withValues(alpha: 0.40),
-        );
-        expect(
-          boardColors.validPremoves,
-          material.Color(corePalette.error.get(40)).withValues(alpha: 0.30),
-        );
-      }
-    });
-
     test('prefers the color schemes exposed by the OS over the core palette', () async {
       final osColorSchemes = List.generate(86, (i) => 0xFF000000 + i);
       DynamicColorTestingUtils.setMockDynamicColors(
@@ -179,11 +150,6 @@ void main() {
       final expected = (await DynamicColorPlugin.getColorSchemes())!;
       expect(muiSchemeColors(schemes!.light), materialSchemeColors(expected.light));
       expect(muiSchemeColors(schemes.dark), materialSchemeColors(expected.dark));
-      // the board colors still come from the core palette
-      expect(
-        getBoardColorScheme()?.darkSquare,
-        material.Color(sampleCorePalette.secondary.get(60)),
-      );
     });
 
     test('leaves the colors unset when the system does not provide any', () async {
@@ -193,7 +159,6 @@ void main() {
 
       expect(getSystemCorePalettes(), isNull);
       expect(getDynamicColorSchemes(), isNull);
-      expect(getBoardColorScheme(), isNull);
     });
   });
 }

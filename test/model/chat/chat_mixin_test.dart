@@ -1,4 +1,3 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +9,7 @@ import 'package:lichess_mobile/src/model/chat/chat.dart';
 import 'package:lichess_mobile/src/model/chat/chat_mixin.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/socket.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart' show SoundTheme;
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/network/http.dart';
@@ -74,9 +74,6 @@ class _RecordingSoundService() implements SoundService {
   Future<void> play(Sound sound, {double? volume}) async {
     played.add(sound);
   }
-
-  @override
-  Future<void> playCaptureSound(dynamic variant, {double? volume}) async {}
 
   @override
   Future<void> changeTheme(SoundTheme theme, {bool playSound = false}) async {}

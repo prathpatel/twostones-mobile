@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
@@ -101,7 +100,7 @@ void main() {
                 provisionalRating: true,
                 lagRating: 4,
               ),
-              variant: Variant.standard,
+              boardSize: 19,
               rated: true,
               speed: Speed.rapid,
               timeControl: ChallengeTimeControlType.clock,
@@ -355,7 +354,7 @@ void main() {
           provisionalRating: true,
           lagRating: 4,
         ),
-        variant: Variant.standard,
+        boardSize: 19,
         rated: true,
         speed: Speed.rapid,
         timeControl: ChallengeTimeControlType.clock,
@@ -381,7 +380,7 @@ void main() {
       const challenge = Challenge(
         id: ChallengeId('H9fIRZUk'),
         status: ChallengeStatus.created,
-        variant: Variant.standard,
+        boardSize: 19,
         rated: false,
         speed: Speed.blitz,
         timeControl: ChallengeTimeControlType.clock,
@@ -412,7 +411,7 @@ void main() {
           provisionalRating: null,
           lagRating: null,
         ),
-        variant: Variant.standard,
+        boardSize: 19,
         rated: false,
         speed: Speed.blitz,
         timeControl: ChallengeTimeControlType.clock,
@@ -443,7 +442,7 @@ void main() {
           provisionalRating: null,
           lagRating: null,
         ),
-        variant: Variant.standard,
+        boardSize: 19,
         rated: true,
         speed: Speed.rapid,
         timeControl: ChallengeTimeControlType.clock,
@@ -473,7 +472,7 @@ void main() {
           provisionalRating: null,
           lagRating: null,
         ),
-        variant: Variant.standard,
+        boardSize: 19,
         rated: true,
         speed: Speed.rapid,
         timeControl: ChallengeTimeControlType.clock,
@@ -552,7 +551,7 @@ void main() {
         (_) async => const Challenge(
           id: ChallengeId('H9fIRZUk'),
           status: ChallengeStatus.created,
-          variant: Variant.standard,
+          boardSize: 19,
           rated: true,
           speed: Speed.rapid,
           timeControl: ChallengeTimeControlType.clock,
@@ -601,7 +600,7 @@ void main() {
           id: ChallengeId('H9fIRZUk'),
           gameFullId: GameFullId('H9fIRZUkabcd'),
           status: ChallengeStatus.accepted,
-          variant: Variant.standard,
+          boardSize: 19,
           rated: true,
           speed: Speed.rapid,
           timeControl: ChallengeTimeControlType.clock,

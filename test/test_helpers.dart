@@ -1,10 +1,10 @@
-import 'package:chessground/chessground.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/widgets/bottom_bar.dart';
+import 'package:lichess_mobile/src/widgets/go_board.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' show GlassScrollEdgeEffect;
 import 'package:material_ui/material_ui.dart';
 
@@ -93,116 +93,31 @@ Future<void> meetsTapTargetGuideline(WidgetTester tester) async {
   }
 }
 
-/// Finds either an interactive [Chessboard] or a [StaticChessboard].
-Finder _anyBoard() => find.byWidgetPredicate((w) => w is Chessboard || w is StaticChessboard);
-
-/// Returns the pieces of the first [Chessboard] or [StaticChessboard] found in the widget tree.
-///
-/// Throws a [StateError] if no [PiecesPainter] is found.
-Map<Square, Piece> getBoardPieces(WidgetTester tester) {
-  for (final element
-      in find.descendant(of: _anyBoard(), matching: find.byType(CustomPaint)).evaluate()) {
-    final widget = element.widget as CustomPaint;
-    if (widget.painter is PiecesPainter) {
-      return (widget.painter! as PiecesPainter).pieces;
-    }
-  }
-  throw StateError('PiecesPainter not found');
-}
-
-/// Returns the [HighlightsPainter] of the first [Chessboard] or [StaticChessboard] found in the widget tree.
-///
-/// Throws a [StateError] if no [HighlightsPainter] is found.
-HighlightsPainter findBoardHighlightPainter(WidgetTester tester) {
-  for (final element
-      in find.descendant(of: _anyBoard(), matching: find.byType(CustomPaint)).evaluate()) {
-    final widget = element.widget as CustomPaint;
-    if (widget.painter is HighlightsPainter) {
-      return widget.painter! as HighlightsPainter;
-    }
-  }
-  throw StateError('HighlightsPainter not found');
-}
-
-/// Returns true if the board has [piece] at [square].
-bool boardHasPiece(WidgetTester tester, Square square, Piece piece) {
-  return getBoardPieces(tester)[square] == piece;
-}
-
-/// Returns the valid moves set currently highlighted on the interactive chessboard.
-Set<Square> getBoardValidMoves(WidgetTester tester) {
-  return findBoardHighlightPainter(tester).interactionNotifier.moveDests;
-}
-
-/// Returns the square of the currently selected piece, or null if no piece is selected.
-Square? getBoardSelectedSquare(WidgetTester tester) {
-  return findBoardHighlightPainter(tester).interactionNotifier.selected;
-}
-
-/// Returns the last move currently highlighted on the chessboard, or null if no last move is highlighted.
-Move? getBoardLastMove(WidgetTester tester) {
-  return findBoardHighlightPainter(tester).interactionNotifier.lastMove;
-}
-
-/// Returns true if the board has a premove highlight set for [move].
-bool boardHasPremove(WidgetTester tester, Move move) {
-  final p = findBoardHighlightPainter(tester);
-  return p.interactionNotifier.premove != null &&
-      switch (move) {
-        NormalMove(:final from, :final to) =>
-          p.interactionNotifier.premove!.hasSquare(from) &&
-              p.interactionNotifier.premove!.hasSquare(to),
-        DropMove(:final to) => p.interactionNotifier.premove!.hasSquare(to),
-      };
-}
-
-/// Returns the offset of a square on a board defined by [Rect].
-Offset squareOffset(Square square, Rect boardRect, {Side orientation = Side.white}) {
-  final squareSize = boardRect.width / 8;
-
-  final dx = (orientation == Side.white ? square.file.value : 7 - square.file.value) * squareSize;
-  final dy = (orientation == Side.white ? 7 - square.rank.value : square.rank.value) * squareSize;
-
-  return Offset(dx + boardRect.left + squareSize / 2, dy + boardRect.top + squareSize / 2);
-}
-
-/// Plays a move on the board.
-Future<void> playMove(
-  WidgetTester tester,
-  String from,
-  String to, {
-  Rect? boardRect,
-  Side orientation = Side.white,
-}) async {
-  final rect = boardRect ?? tester.getRect(find.byType(Chessboard));
-  await tester.tapAt(squareOffset(Square.fromName(from), rect, orientation: orientation));
-  await tester.pump();
-  await tester.tapAt(squareOffset(Square.fromName(to), rect, orientation: orientation));
-  await tester.pump();
-}
-
-/// Plays a drop move on the board.
-Future<void> playDropMove(
-  WidgetTester tester,
-  Side side,
-  Role role,
-  String to, {
-  Rect? boardRect,
-  Side orientation = Side.white,
-}) async {
-  final rect = boardRect ?? tester.getRect(find.byType(Chessboard));
-  final targetOffset = squareOffset(Square.fromName(to), rect, orientation: orientation);
-  final fromOffset = tester.getCenter(find.byKey(ValueKey('pocket-${side.name}${role.name}')));
-  await tester.dragFrom(fromOffset, targetOffset - fromOffset);
-  await tester.pumpAndSettle();
-}
-
 /// The asset names of every [Image] currently rendered.
 Iterable<String> imageAssetNames(WidgetTester tester) => tester
     .widgetList<Image>(find.byType(Image))
     .map((image) => image.image)
     .whereType<AssetImage>()
     .map((provider) => provider.assetName);
+
+/// The position shown on the [GoBoard] of the screen.
+GoPosition getGoBoardPosition(WidgetTester tester) =>
+    tester.widget<GoBoard>(find.byType(GoBoard)).position;
+
+/// Taps the point of the [GoBoard] printed as [coord] (`"E5"`).
+Future<void> tapGoPoint(WidgetTester tester, String coord) async {
+  final board = tester.widget<GoBoard>(find.byType(GoBoard));
+  final size = board.position.size;
+  const columns = 'ABCDEFGHJKLMNOPQRST';
+  final point = (size - int.parse(coord.substring(1))) * size + columns.indexOf(coord[0]);
+  final geometry = GoBoardGeometry(
+    size: board.size,
+    boardSize: size,
+    showCoordinates: board.showCoordinates,
+  );
+  await tester.tapAt(tester.getTopLeft(find.byType(GoBoard)) + geometry.offsetOf(point));
+  await tester.pump();
+}
 
 void mockClipboard(String text) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(

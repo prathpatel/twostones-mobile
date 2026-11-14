@@ -277,7 +277,8 @@ class CreateGameService(final Logger _log, {required final Ref ref, required fin
     if (_lobbyConnection == null) return;
     _log.info('Cancelling game creation');
     try {
-      await LobbyRepository(lichessClient).cancelSeek(sri: sri);
+      // the seek belongs to the lobby socket, which removes it on a `cancel` message
+      ref.read(socketPoolProvider).currentClient.send('cancel', null);
       if (_lobbyConnection != null && _lobbyConnection!.$2.isCompleted == false) {
         _lobbyConnection!.$2.complete(const GameSeekCancelled());
       }

@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 
@@ -66,7 +65,7 @@ void main() {
       final result = await repo.create(
         const ChallengeRequest(
           destUser: null,
-          variant: Variant.standard,
+          boardSize: 19,
           timeControl: ChallengeTimeControlType.clock,
           rated: false,
           sideChoice: SideChoice.black,

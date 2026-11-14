@@ -390,7 +390,25 @@ class const GameStep({
 
   /// The remaining black clock time at this step. Only available when the game is finished.
   final Duration? archivedBlackClock,
-});
+}) {
+  @override
+  bool operator ==(Object other) =>
+      other is GameStep &&
+      other.move == move &&
+      other.position.boardString == position.boardString &&
+      other.position.turn == position.turn &&
+      other.archivedWhiteClock == archivedWhiteClock &&
+      other.archivedBlackClock == archivedBlackClock;
+
+  @override
+  int get hashCode => Object.hash(
+    move,
+    position.boardString,
+    position.turn,
+    archivedWhiteClock,
+    archivedBlackClock,
+  );
+}
 
 /// The steps of a game played with [moves] on a board of [boardSize] lines.
 ///

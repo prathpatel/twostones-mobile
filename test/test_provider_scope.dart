@@ -16,7 +16,6 @@ import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/auth/auth_storage.dart';
 import 'package:lichess_mobile/src/model/common/preloaded_data.dart';
-import 'package:lichess_mobile/src/model/game/game_live_activity.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/model/settings/preferences_storage.dart';
 import 'package:lichess_mobile/src/network/aggregator.dart';
@@ -36,7 +35,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 import 'binding.dart';
-import 'model/game/fake_game_live_activity_channel.dart';
 import 'model/notifications/fake_notification_display.dart';
 import 'network/fake_http_client_factory.dart';
 import 'network/fake_websocket_channel.dart';
@@ -187,9 +185,9 @@ Future<Widget> makeTestProviderScope(
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
 
   final defaultTestPrefs = {
-    // disable piece animation to simplify tests
+    // a stone is played as soon as a point is tapped, unless a test enables the confirmation
     PrefCategory.board.storageKey: jsonEncode(
-      BoardPrefs.defaults.copyWith(pieceAnimation: false).toJson(),
+      BoardPrefs.defaults.copyWith(confirmMove: false).toJson(),
     ),
   };
 
@@ -251,9 +249,6 @@ Future<Widget> makeTestProviderScope(
     connectivityPluginProvider: connectivityPluginProvider.overrideWith((_) => FakeConnectivity()),
     showRatingsPrefProvider: showRatingsPrefProvider.overrideWith((ref) => ShowRatings.yes),
     soundServiceProvider: soundServiceProvider.overrideWithValue(FakeSoundService()),
-    gameLiveActivityChannelProvider: gameLiveActivityChannelProvider.overrideWithValue(
-      FakeGameLiveActivityChannel(),
-    ),
     preloadedDataProvider: preloadedDataProvider.overrideWith((ref) {
       return (
         sri: 'test-sri',

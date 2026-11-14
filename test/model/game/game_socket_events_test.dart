@@ -1,159 +1,149 @@
 import 'dart:convert';
 
-import 'package:dartchess/dartchess.dart';
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
-import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_socket_events.dart';
+import 'package:lichess_mobile/src/model/game/game_status.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
+
+import 'game_socket_example_data.dart';
+
+Map<String, dynamic> _data(String event) =>
+    (jsonDecode(event) as Map<String, dynamic>)['d'] as Map<String, dynamic>;
 
 void main() {
-  test('decode game full event from websocket json', () {
-    final json = jsonDecode(_gameJson) as Map<String, dynamic>;
-    final fullEvent = GameFullEvent.fromJson(json);
-    final game = fullEvent.game;
-    expect(game.id, const GameId('nV3DaALy'));
-    expect(game.clock?.running, true);
-    expect(game.clock?.white, const Duration(seconds: 149, milliseconds: 50));
-
-    expect(game.clock?.black, const Duration(seconds: 775, milliseconds: 940));
-    expect(
-      game.meta,
-      GameMeta(
-        createdAt: DateTime.fromMillisecondsSinceEpoch(1685698678928),
-        rated: false,
-        variant: Variant.standard,
-        speed: Speed.classical,
-        perf: Perf.classical,
-        clock: (
-          initial: const Duration(minutes: 10),
-          increment: const Duration(seconds: 30),
-          emergency: const Duration(seconds: 60),
-          moreTime: const Duration(seconds: 15),
+  group('GameFullEvent', () {
+    test('reads the game page of the server', () {
+      final event = GameFullEvent.fromJson(
+        _data(
+          makeFullEvent(
+            const GameId('nV3DaALy'),
+            const ['ee', 'cc', 'gc'],
+            whiteUserName: 'Peter',
+            blackUserName: 'Steven',
+            youAre: Side.white,
+            socketVersion: 7,
+          ),
         ),
-        daysPerTurn: null,
-        startedAtTurn: null,
-        rules: ISet(const [GameRule.noClaimWin]),
-        opening: null,
-      ),
-    );
-    expect(
-      game.correspondenceForecast,
-      IList([
-        IList([
-          SanMove('e4', NormalMove.fromUci('e2e4')),
-          SanMove('e5', NormalMove.fromUci('e7e5')),
-        ]),
-        IList([
-          SanMove('d4', NormalMove.fromUci('d2d4')),
-          SanMove('d5', NormalMove.fromUci('d7d5')),
-        ]),
-      ]),
-    );
+      );
+      final game = event.game;
+
+      expect(event.socketEventVersion, 7);
+      expect(game.id, const GameId('nV3DaALy'));
+      expect(game.meta.boardSize, 9);
+      expect(game.meta.komi, 7.5);
+      expect(game.meta.handicap, 0);
+      expect(game.meta.speed, Speed.blitz);
+      expect(game.meta.perf, Perf.blitz);
+      expect(game.status, GameStatus.started);
+      expect(game.youAre, Side.white);
+      expect(game.white.user?.name, 'Peter');
+      expect(game.black.user?.name, 'Steven');
+      expect(game.moveCount, 3);
+      expect(game.lastPosition.turn, Side.white);
+      expect(game.isMyTurn, isTrue);
+      expect(game.lastMove, GoMove.fromKey('gc', 9));
+      expect(game.clock?.white, const Duration(minutes: 3));
+    });
+
+    test('a spectator has no side', () {
+      final game = GameFullEvent.fromJson(
+        _data(
+          makeFullEvent(
+            const GameId('nV3DaALy'),
+            const [],
+            whiteUserName: 'Peter',
+            blackUserName: 'Steven',
+          ),
+        ),
+      ).game;
+      expect(game.youAre, isNull);
+    });
+
+    test('reads a handicap game and the computer opponent', () {
+      final game = GameFullEvent.fromJson(
+        _data(
+          makeFullEvent(
+            const GameId('nV3DaALy'),
+            const ['jj'],
+            boardSize: 19,
+            handicap: 2,
+            whiteUserName: 'Peter',
+            blackUserName: 'Steven',
+            youAre: Side.black,
+            aiOpponent: true,
+          ),
+        ),
+      ).game;
+      expect(game.meta.handicap, 2);
+      expect(game.meta.komi, 0.5);
+      expect(game.lastPosition.board.where((stone) => stone == Side.black).length, 2);
+      expect(game.lastPosition.board.where((stone) => stone == Side.white).length, 1);
+      expect(game.white.aiLevel, 3);
+      expect(game.white.aiEngine, 'KataGo');
+    });
+
+    test('reads the counting phase', () {
+      final game = GameFullEvent.fromJson(
+        _data(
+          makeFullEvent(
+            const GameId('nV3DaALy'),
+            const ['ee', 'cc', 'pass', 'pass'],
+            whiteUserName: 'Peter',
+            blackUserName: 'Steven',
+            youAre: Side.black,
+            scoring: '''
+{"dead": [20], "accepted": ["white"], "score": {"black": 45, "white": 43.5, "komi": 7.5,
+"result": "B+1.5", "territory": {"black": 36, "white": 27}, "stones": {"black": 9, "white": 9},
+"ownership": [[0, 1], [8, 2]]}}''',
+          ),
+        ),
+      ).game;
+      expect(game.inScoringPhase, isTrue);
+      expect(game.scoring?.dead.toSet(), {20});
+      expect(game.scoring?.accepted.toSet(), {Side.white});
+      expect(game.scoring?.score.result, 'B+1.5');
+      expect(game.scoring?.score.ownership[0], Side.black);
+      expect(game.scoring?.score.ownership[8], Side.white);
+      expect(game.hasAcceptedScore, isFalse);
+    });
+  });
+
+  group('MoveEvent', () {
+    test('reads a move and the board after it', () {
+      final event = MoveEvent.fromJson(
+        _data(makeMoveEvent(ply: 2, move: 'cc', coord: 'C7', board: '.' * 81, whitePrisoners: 1)),
+      );
+      expect(event.ply, 2);
+      expect(event.move, 'cc');
+      expect(event.whitePrisoners, 1);
+      expect(event.nextSide, Side.white);
+      expect(event.scoring, isFalse);
+    });
+  });
+
+  group('GameEndEvent', () {
+    test('reads the result and the score', () {
+      final event = GameEndEvent.fromJson({
+        'status': {'id': 60, 'name': 'variantEnd'},
+        'winner': 'black',
+        'ratingDiff': {'white': -8, 'black': 8},
+        'score': {
+          'black': 45,
+          'white': 43.5,
+          'komi': 7.5,
+          'result': 'B+1.5',
+          'territory': {'black': 36, 'white': 27},
+          'stones': {'black': 9, 'white': 9},
+          'ownership': <List<int>>[],
+        },
+      });
+      expect(event.status, GameStatus.variantEnd);
+      expect(event.winner, Side.black);
+      expect(event.ratingDiff, (white: -8, black: 8));
+      expect(event.score?.result, 'B+1.5');
+    });
   });
 }
-
-const _gameJson = '''
-{
-  "game": {
-    "id": "nV3DaALy",
-      "variant": {
-        "key": "standard",
-        "name": "Standard",
-        "short": "Std"
-      },
-      "speed": "classical",
-      "perf": "classical",
-      "rated": false,
-      "source": "ai",
-      "status": {
-        "id": 20,
-        "name": "started"
-      },
-      "rules": ["noClaimWin"],
-      "createdAt": 1685698678928,
-      "pgn": "e4 e6 Nf3 f6"
-  },
-  "forecast": {
-    "_id": "w48wCvjwDKff",
-    "steps": [
-      [
-        {
-          "ply": 1,
-          "uci": "e2e4",
-          "san": "e4",
-          "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
-        },
-        {
-          "ply": 2,
-          "uci": "e7e5",
-          "san": "e5",
-          "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
-        }
-      ],
-      [
-        {
-          "ply": 1,
-          "uci": "d2d4",
-          "san": "d4",
-          "fen": "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1"
-        },
-        {
-          "ply": 2,
-          "uci": "d7d5",
-          "san": "d5",
-          "fen": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2"
-        }
-      ]
-    ],
-    "date": 1750526972246
-  },
-  "white": {
-    "user": {
-      "name": "thibault",
-      "patron": true,
-      "patronColor": 1,
-      "id": "thibault"
-    },
-    "rating": 1806,
-    "provisional": true,
-    "onGame": true
-  },
-  "black": {
-    "aiLevel": 2,
-    "onGame": true
-  },
-  "socket": 4,
-  "clock": {
-    "running": true,
-    "initial": 600,
-    "increment": 30,
-    "white": 149.05,
-    "black": 775.94,
-    "emerg": 60,
-    "moretime": 15
-  },
-  "expiration": {
-    "idleMillis": 245,
-    "millisToMove": 30000
-  },
-  "chat": {
-    "lines": [
-      {
-        "u": "Zidrox",
-        "t": "Good luck",
-        "f": "people.man-singer"
-      },
-      {
-        "u": "lichess",
-        "t": "Takeback accepted",
-        "f": "activity.lichess"
-      }
-    ]
-  }
-}
-''';

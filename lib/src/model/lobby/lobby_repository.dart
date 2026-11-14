@@ -32,14 +32,12 @@ class CorrespondenceSeeks() extends AsyncNotifier<IList<CorrespondenceSeek>> {
 }
 
 class LobbyRepository(final LichessClient client) {
+  /// Puts a seek in the lobby of the server, for the lobby socket of id [sri].
+  ///
+  /// When an opponent takes it, the lobby socket receives a `redirect` event with the game.
   Future<void> createSeek(GameSeek seek, {required String sri}) async {
-    final uri = Uri(path: '/api/board/seek', queryParameters: {'sri': sri});
+    final uri = Uri(path: '/setup/hook/$sri');
     await client.postRead(uri, body: seek.requestBody);
-  }
-
-  Future<void> cancelSeek({required String sri}) async {
-    final uri = Uri(path: '/api/board/seek', queryParameters: {'sri': sri});
-    await client.deleteRead(uri);
   }
 
   /// Fetches the current correspondence seeks.

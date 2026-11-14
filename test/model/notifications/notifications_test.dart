@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:dartchess/dartchess.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/notifications/notifications.dart';
 import 'package:mocktail/mocktail.dart';
 

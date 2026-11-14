@@ -305,28 +305,30 @@ class const _PlayableGameBoard({
             side: topSide,
             clockKey: topSide == Side.white ? whiteClockKey : blackClockKey,
           ),
-          bottomTable: _GamePlayerTable(
-            gameId: gameId,
-            side: bottomSide,
-            clockKey: bottomSide == Side.white ? whiteClockKey : blackClockKey,
-            // The claim-win countdown is the user's action, so it is shown in the bottom table
-            // only.
-            showOpponentLeftCountdown: true,
+          // During the counting, the count and its buttons take the place under the board, close to
+          // the stones the player taps.
+          bottomTable: Column(
+            mainAxisAlignment: .spaceEvenly,
+            children: [
+              _ScoringPanel(id: gameId),
+              _GamePlayerTable(
+                gameId: gameId,
+                side: bottomSide,
+                clockKey: bottomSide == Side.white ? whiteClockKey : blackClockKey,
+                // The claim-win countdown is the user's action, so it is shown in the bottom table
+                // only.
+                showOpponentLeftCountdown: true,
+              ),
+            ],
           ),
           moves: board.moves.unlockView,
           currentMoveIndex: board.cursor,
           onSelectMove: (moveIndex) => ref.read(ctrlProvider.notifier).cursorAt(moveIndex),
           zenMode: shell.zen,
-          userActionsBar: Column(
-            mainAxisSize: .min,
-            children: [
-              _ScoringPanel(id: gameId),
-              _GameBottomBar(
-                id: gameId,
-                onLoadGameCallback: onLoadGameCallback,
-                onNewOpponentCallback: onNewOpponentCallback,
-              ),
-            ],
+          userActionsBar: _GameBottomBar(
+            id: gameId,
+            onLoadGameCallback: onLoadGameCallback,
+            onNewOpponentCallback: onNewOpponentCallback,
           ),
         ),
       ),
@@ -495,35 +497,38 @@ class const _ScoringPanel({required final GameFullId id}) extends ConsumerWidget
 
     return Material(
       color: colorScheme.secondaryContainer,
+      borderRadius: const BorderRadius.all(Radius.circular(8.0)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
         child: Row(
-          spacing: 12.0,
+          spacing: 8.0,
           children: [
             Expanded(
-              child: Column(
-                mainAxisSize: .min,
-                crossAxisAlignment: .start,
-                children: [
-                  Text(
-                    data.result != null ? 'Counting: ${data.result}' : 'Counting',
-                    style: TextStyle(fontWeight: .bold, color: colorScheme.onSecondaryContainer),
-                  ),
-                  Text(
-                    !data.isPlayer
-                        ? 'The players are agreeing on the dead stones.'
-                        : data.accepted
-                        ? 'Waiting for your opponent to accept.'
-                        : data.opponentAccepted
-                        ? 'Your opponent accepted this count.'
-                        : 'Tap a group to mark it dead or alive.',
-                    style: TextStyle(fontSize: 13, color: colorScheme.onSecondaryContainer),
-                  ),
-                ],
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: data.result != null ? '${data.result}  ' : '',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    TextSpan(
+                      text: !data.isPlayer
+                          ? 'The players are agreeing on the dead stones.'
+                          : data.accepted
+                          ? 'Waiting for your opponent to accept.'
+                          : data.opponentAccepted
+                          ? 'Your opponent accepted this count.'
+                          : 'Tap a group to mark it dead or alive.',
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, color: colorScheme.onSecondaryContainer),
               ),
             ),
             if (data.isPlayer) ...[
-              TextButton(onPressed: notifier.resumePlay, child: const Text('Resume play')),
+              TextButton(onPressed: notifier.resumePlay, child: const Text('Resume')),
               FilledButton(
                 onPressed: data.accepted ? null : notifier.acceptScore,
                 child: Text(context.l10n.accept),

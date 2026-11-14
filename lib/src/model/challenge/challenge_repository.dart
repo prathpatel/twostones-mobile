@@ -39,11 +39,19 @@ class const ChallengeRepository(final LichessClient client, final Aggregator agg
   }
 
   Future<Challenge> create(ChallengeRequest challengeReq) async {
-    final uri = Uri(path: '/api/challenge/${challengeReq.destUser?.id ?? 'open'}');
+    final uri = Uri(
+      path: '/setup/friend',
+      queryParameters: {if (challengeReq.destUser != null) 'user': challengeReq.destUser!.id.value},
+    );
+    // The server answers with the challenge and the version of its socket.
     final challenge = await client.postReadJson(
       uri,
+      headers: {'Accept': 'application/json'},
       body: challengeReq.toRequestBody,
-      mapper: Challenge.fromServerJson,
+      mapper: (json) => Challenge.fromServerJson({
+        ...json['challenge'] as Map<String, dynamic>,
+        'socketVersion': json['socketVersion'],
+      }),
     );
 
     // The API doesn't directly allow us to create an open challenge and also join it in one step,
@@ -62,19 +70,19 @@ class const ChallengeRepository(final LichessClient client, final Aggregator agg
 
   Future<void> accept(ChallengeId id, {Side? side}) async {
     final uri = Uri(
-      path: '/api/challenge/$id/accept',
+      path: '/challenge/$id/accept',
       queryParameters: {if (side != null) 'color': side.name},
     );
-    await client.postRead(uri);
+    await client.postRead(uri, headers: {'Accept': 'application/json'});
   }
 
   Future<void> decline(ChallengeId id, {ChallengeDeclineReason? reason}) async {
-    final uri = Uri(path: '/api/challenge/$id/decline');
+    final uri = Uri(path: '/challenge/$id/decline');
     await client.postRead(uri, body: reason != null ? {'reason': reason.name} : null);
   }
 
   Future<void> cancel(ChallengeId id) async {
-    final uri = Uri(path: '/api/challenge/$id/cancel');
+    final uri = Uri(path: '/challenge/$id/cancel');
     await client.postRead(uri);
   }
 

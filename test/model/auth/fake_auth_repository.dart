@@ -15,16 +15,6 @@ final fakeUser = User(
     Perf.rapid: _fakePerf,
     Perf.classical: _fakePerf,
     Perf.correspondence: _fakePerf,
-    Perf.chess960: _fakePerf,
-    Perf.antichess: _fakePerf,
-    Perf.kingOfTheHill: _fakePerf,
-    Perf.threeCheck: _fakePerf,
-    Perf.atomic: _fakePerf,
-    Perf.horde: _fakePerf,
-    Perf.racingKings: _fakePerf,
-    Perf.crazyhouse: _fakePerf,
-    Perf.puzzle: _fakePerf,
-    Perf.storm: _fakePerf,
   }),
 );
 
