@@ -9,7 +9,6 @@ import 'package:lichess_mobile/src/model/message/message_repository.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/network/http.dart';
-import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
@@ -22,6 +21,7 @@ import 'package:lichess_mobile/src/widgets/adaptive_action_sheet.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/misc.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
 import 'package:lichess_mobile/src/widgets/user.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -216,16 +216,6 @@ class _AccountMenuScreenState()
           ),
           ListSection(
             children: [
-              if (Theme.of(context).platform == TargetPlatform.android)
-                ListTile(
-                  leading: Icon(
-                    LichessIcons.patron,
-                    semanticLabel: context.l10n.patronLichessPatron,
-                  ),
-                  title: Text(context.l10n.patronDonate),
-                  enabled: isOnline,
-                  onTap: () => launchUrl(Uri.parse('https://lichess.org/patron')),
-                ),
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 trailing: Theme.of(context).platform == TargetPlatform.iOS
@@ -381,12 +371,12 @@ class const AboutScreen({super.key}) extends ConsumerWidget {
               ListTile(
                 enabled: isOnline,
                 leading: const Icon(Icons.info_outlined),
-                title: Text(context.l10n.aboutX('Lichess')),
+                title: Text(context.l10n.aboutX('TwoStones')),
                 trailing: Theme.of(context).platform == TargetPlatform.iOS
                     ? const CupertinoListTileChevron()
                     : null,
                 onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/about'));
+                  launchUrl(lichessUri('/about'));
                 },
               ),
               ListTile(
@@ -397,7 +387,7 @@ class const AboutScreen({super.key}) extends ConsumerWidget {
                     ? const CupertinoListTileChevron()
                     : null,
                 onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/contact'));
+                  launchUrl(lichessUri('/contact'));
                 },
               ),
               ListTile(
@@ -408,7 +398,7 @@ class const AboutScreen({super.key}) extends ConsumerWidget {
                     ? const CupertinoListTileChevron()
                     : null,
                 onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/terms-of-service'));
+                  launchUrl(lichessUri('/terms-of-service'));
                 },
               ),
               ListTile(
@@ -419,7 +409,7 @@ class const AboutScreen({super.key}) extends ConsumerWidget {
                     ? const CupertinoListTileChevron()
                     : null,
                 onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/privacy'));
+                  launchUrl(lichessUri('/privacy'));
                 },
               ),
             ],
@@ -429,46 +419,13 @@ class const AboutScreen({super.key}) extends ConsumerWidget {
             children: [
               ListTile(
                 enabled: isOnline,
-                leading: const Icon(Symbols.database),
-                title: Text(context.l10n.database),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                onTap: () {
-                  launchUrl(Uri.parse('https://database.lichess.org'));
-                },
-              ),
-              ListTile(
-                enabled: isOnline,
                 leading: const Icon(Icons.code_outlined),
                 title: Text(context.l10n.sourceCode),
                 trailing: Theme.of(context).platform == TargetPlatform.iOS
                     ? const CupertinoListTileChevron()
                     : null,
                 onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/source'));
-                },
-              ),
-              ListTile(
-                enabled: isOnline,
-                leading: const Icon(Icons.bug_report_outlined),
-                title: Text(context.l10n.contribute),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/help/contribute'));
-                },
-              ),
-              ListTile(
-                enabled: isOnline,
-                leading: const Icon(Icons.star_border_outlined),
-                title: Text(context.l10n.thankYou),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                onTap: () {
-                  launchUrl(Uri.parse('https://lichess.org/thanks'));
+                  launchUrl(lichessUri('/source'));
                 },
               ),
             ],
@@ -485,9 +442,9 @@ class const AboutScreen({super.key}) extends ConsumerWidget {
                 onTap: () {
                   showLicensePage(
                     context: context,
-                    applicationName: 'Lichess',
+                    applicationName: 'TwoStones',
                     applicationVersion: packageInfo.version,
-                    applicationIcon: const Icon(LichessIcons.logo_lichess),
+                    applicationIcon: const TwoStonesLogo(size: 48),
                   );
                 },
               ),

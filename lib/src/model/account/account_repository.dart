@@ -108,11 +108,7 @@ class AccountRepository(final LichessClient client, final Aggregator aggregator)
 AccountPrefState _accountPreferencesFromPick(RequiredPick pick) {
   return AccountPrefState(
     zenMode: Zen.fromInt(pick('zen').asIntOrThrow()),
-    pieceNotation: PieceNotation.fromInt(pick('pieceNotation').asIntOrThrow()),
     showRatings: ShowRatings.fromInt(pick('ratings').asIntOrThrow()),
-    premove: BooleanPref(pick('premove').asBoolOrThrow()),
-    autoQueen: AutoQueen.fromInt(pick('autoQueen').asIntOrThrow()),
-    autoThreefold: AutoThreefold.fromInt(pick('autoThreefold').asIntOrThrow()),
     takeback: Takeback.fromInt(pick('takeback').asIntOrThrow()),
     moretime: Moretime.fromInt(pick('moretime').asIntOrThrow()),
     clockTenths: ClockTenths.fromInt(pick('clockTenths').asIntOrThrow()),
@@ -122,6 +118,5 @@ AccountPrefState _accountPreferencesFromPick(RequiredPick pick) {
     follow: BooleanPref(pick('follow').asBoolOrThrow()),
     challenge: Challenge.fromInt(pick('challenge').asIntOrThrow()),
     message: Message.fromInt(pick('message').asIntOrThrow()),
-    favoriteFederation: pick('favFed').letOrNull((p) => FederationId.fromCode(p.asStringOrThrow())),
   );
 }

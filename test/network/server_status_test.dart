@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 import 'package:lichess_mobile/src/network/server_status.dart';
 
@@ -48,26 +47,12 @@ void main() {
       expect(container.read(serverStatusProvider), ServerStatus.up);
     });
 
-    test('a 502 from the opening explorer does not affect the server status', () async {
+    test('a 502 from another host does not affect the server status', () async {
       final container = await lichessClientContainer(
         MockClient((request) async => http.Response('', 502)),
       );
 
-      await container
-          .read(lichessClientProvider)
-          .get(Uri.https(kLichessOpeningExplorerHost, '/lichess'));
-
-      expect(container.read(serverStatusProvider), ServerStatus.up);
-    });
-
-    test('a 502 from the tablebase does not affect the server status', () async {
-      final container = await lichessClientContainer(
-        MockClient((request) async => http.Response('', 502)),
-      );
-
-      await container
-          .read(lichessClientProvider)
-          .get(Uri.https(kLichessTablebaseHost, '/standard'));
+      await container.read(lichessClientProvider).get(Uri.https('example.com', '/'));
 
       expect(container.read(serverStatusProvider), ServerStatus.up);
     });

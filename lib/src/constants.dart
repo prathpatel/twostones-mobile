@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
-const kLichessHost = String.fromEnvironment('LICHESS_HOST', defaultValue: 'lichess.dev');
+/// The TwoStones server. Run against another one with `--dart-define=LICHESS_HOST=localhost:9663`.
+const kLichessHost = String.fromEnvironment('LICHESS_HOST', defaultValue: 'twostones.org');
 
-const kLichessWSHost = String.fromEnvironment(
-  'LICHESS_WS_HOST',
-  defaultValue: 'socket.lichess.dev',
-);
+const kLichessWSHost = String.fromEnvironment('LICHESS_WS_HOST', defaultValue: 'ws.twostones.org');
 
 const kLichessWSSecret = String.fromEnvironment(
   'LICHESS_WS_SECRET',
@@ -15,17 +13,7 @@ const kLichessWSSecret = String.fromEnvironment(
 
 const kLichessCDNHost = String.fromEnvironment(
   'LICHESS_CDN_HOST',
-  defaultValue: 'https://lichess.org',
-);
-
-const kLichessOpeningExplorerHost = String.fromEnvironment(
-  'LICHESS_OPENING_EXPLORER_HOST',
-  defaultValue: 'explorer.lichess.org',
-);
-
-const kLichessTablebaseHost = String.fromEnvironment(
-  'LICHESS_TABLEBASE_HOST',
-  defaultValue: 'tablebase.lichess.org',
+  defaultValue: 'https://twostones.org',
 );
 
 const kLichessCustomUriSchemeName = 'org.lichess.mobile';
@@ -34,17 +22,10 @@ const kLichessClientId = 'lichess_mobile';
 
 const kSRIStorageKey = 'socket_random_identifier';
 
-const kFideRatingsUrl = 'https://ratings.fide.com/profile/';
-
 // lichess
 // https://github.com/lichess-org/lila/blob/4562a83cdb263c3ebf7e148c0f666f0ff92b91c7/modules/rating/src/main/Glicko.scala#L71
 const kProvisionalDeviation = 110;
 const kClueLessDeviation = 230;
-
-const kMaintenanceDrawingAuthorUrl = 'https://www.pixiv.net/member.php?id=34624';
-const kLichessMastodonUrl = 'https://mastodon.online/@lichess';
-const kLichessBlueskyUrl = 'https://bsky.app/profile/lichess.org';
-const kLichessDiscordUrl = 'https://discord.gg/lichess';
 
 // UI
 

@@ -39,7 +39,7 @@ class const UserProfileWidget({required final User user, final int bioMaxLines =
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        context.l10n.thisAccountViolatedTos,
+                        'The TwoStones Terms of Service were violated on this account',
                         style: TextStyle(
                           color: context.lichessColors.red,
                           fontWeight: FontWeight.bold,

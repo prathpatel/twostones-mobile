@@ -1,6 +1,5 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/rate_limit.dart';
 import 'package:material_ui/material_ui.dart';
@@ -64,10 +63,6 @@ class _MoveListState() extends ConsumerState<MoveList> {
 
   @override
   Widget build(BuildContext context) {
-    final pieceNotation = ref
-        .watch(pieceNotationProvider)
-        .maybeWhen(data: (value) => value, orElse: () => defaultAccountPreferences.pieceNotation);
-
     return widget.type == MoveListType.inline
         ? Container(
             decoration: widget.inlineDecoration,
@@ -90,7 +85,6 @@ class _MoveListState() extends ConsumerState<MoveList> {
                               key: isCurrentMove ? currentMoveKey : null,
                               move: move,
                               color: widget.inlineColor,
-                              pieceNotation: pieceNotation,
                               current: isCurrentMove,
                               onSelectMove: widget.onSelectMove,
                             );
@@ -123,7 +117,6 @@ class _MoveListState() extends ConsumerState<MoveList> {
                                     child: StackedMoveItem(
                                       key: isCurrentMove ? currentMoveKey : null,
                                       move: move,
-                                      pieceNotation: pieceNotation,
                                       current: isCurrentMove,
                                       onSelectMove: widget.onSelectMove,
                                     ),
@@ -161,7 +154,6 @@ class const InlineMoveCount({required final int count, final Color? color})
 
 class const InlineMoveItem({
   required final MapEntry<int, String> move,
-  required final PieceNotation pieceNotation,
   final Color? color,
   final bool? current,
   final void Function(int moveIndex)? onSelectMove,
@@ -176,7 +168,6 @@ class const InlineMoveItem({
         child: Text(
           move.value,
           style: TextStyle(
-            fontFamily: pieceNotation == PieceNotation.symbol ? 'ChessFont' : null,
             fontWeight: current == true ? FontWeight.bold : FontWeight.w500,
             color: current != true
                 ? color != null
@@ -205,7 +196,6 @@ class const StackedMoveCount({required final int count}) extends StatelessWidget
 
 class const StackedMoveItem({
   required final MapEntry<int, String> move,
-  required final PieceNotation pieceNotation,
   final bool? current,
   final void Function(int moveIndex)? onSelectMove,
   super.key,
@@ -219,7 +209,6 @@ class const StackedMoveItem({
         child: Text(
           move.value,
           style: TextStyle(
-            fontFamily: pieceNotation == PieceNotation.symbol ? 'ChessFont' : null,
             fontWeight: current == true ? FontWeight.bold : null,
             color: current != true ? textShade(context, 0.8) : null,
           ),

@@ -272,9 +272,6 @@ class NotificationService(final Ref _ref) {
       case CorresGameUpdateFcmMessage():
       case CorresChallengeCreateFcmMessage():
       case CorresChallengeAcceptFcmMessage():
-      case BroadcastRoundFcmMessage():
-      case BroadcastPlayerFollowFcmMessage():
-      case RecapFcmMessage():
         break;
     }
   }

@@ -12,24 +12,15 @@ void main() {
       const response = '''
 {
   "prefs": {
-    "dark": true,
-    "transp": false,
     "bgImg": "http://example.com",
-    "is3d": false,
-    "theme": "blue",
-    "pieceSet": "cburnett",
-    "theme3d": "Black-White-Aluminium",
-    "pieceSet3d": "Basic",
-    "soundSet": "silent",
-    "blindfold": 0,
-    "autoQueen": 2,
-    "autoThreefold": 2,
+    "theme": "wood",
+    "pieceSet": "stones",
+    "soundSet": "standard",
     "takeback": 3,
     "moretime": 3,
     "clockTenths": 1,
     "clockBar": true,
     "clockSound": true,
-    "premove": true,
     "animation": 2,
     "captured": true,
     "follow": true,
@@ -39,16 +30,14 @@ void main() {
     "replay": 2,
     "challenge": 4,
     "message": 3,
-    "coordColor": 2,
     "submitMove": 4,
     "confirmResign": 1,
-    "insightShare": 1,
-    "keyboardMove": 0,
+    "voiceMove": false,
     "zen": 0,
-    "pieceNotation": 0,
     "ratings": 1,
     "moveEvent": 2,
-    "rookCastle": 1
+    "flairs": true,
+    "sayGG": 0
   },
   "language": "en-GB"
 }
@@ -67,7 +56,8 @@ void main() {
 
       expect(result, isA<AccountPrefState>());
 
-      expect(result.autoQueen, AutoQueen.premove);
+      expect(result.takeback, Takeback.always);
+      expect(result.submitMove.choices, isNotEmpty);
     });
 
     test('closeAccount posts username, passwd, token and forever', () async {

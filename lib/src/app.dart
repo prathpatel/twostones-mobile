@@ -1,17 +1,11 @@
-import 'dart:async';
-import 'dart:io';
-
 // ignore: deprecated_member_use
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoUiCompatibilityBridge;
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:home_widget/home_widget.dart';
 import 'package:intl/intl.dart';
 import 'package:l10n_esperanto/l10n_esperanto.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
-import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/intl.dart';
-import 'package:lichess_mobile/src/model/account/account_repository.dart';
 import 'package:lichess_mobile/src/model/common/preloaded_data.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
 import 'package:lichess_mobile/src/service/account_service.dart';
@@ -31,13 +25,6 @@ import 'package:lichess_mobile/src/utils/screen.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart' show usePinnedNavBar;
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' show GlassNavigationShell;
 import 'package:material_ui/material_ui.dart';
-
-const String _kIosAppGroupId = 'group.org.lichess.mobileV2.LichessWidgets';
-const List<String> _kIosBlogWidgetKinds = [
-  'OfficialBlogWidget',
-  'CommunityBlogWidget',
-  'UserBlogFeedWidget',
-];
 
 /// Application initialization and main entry point.
 class const AppInitializationScreen({super.key}) extends ConsumerWidget {
@@ -90,23 +77,6 @@ class _AppState() extends ConsumerState<Application> {
     ref.read(announceServiceProvider).start();
     ref.read(appLinksServiceProvider).start();
 
-    if (Platform.isIOS) {
-      HomeWidget.setAppGroupId(_kIosAppGroupId);
-    }
-    HomeWidget.saveWidgetData<String>('lichessHost', kLichessHost);
-
-    if (Platform.isIOS) {
-      ref.listenManual(kidModeProvider, (prev, state) {
-        if (state.hasValue && prev?.value != state.value) {
-          HomeWidget.saveWidgetData<bool>('isKidMode', state.value).then((_) {
-            Future.wait([
-              for (final kind in _kIosBlogWidgetKinds) HomeWidget.updateWidget(iOSName: kind),
-            ]);
-          });
-        }
-      }, fireImmediately: true);
-    }
-
     // [setupIntl] sets [Intl.defaultLocale] on startup: follow the app language from then on.
     ref.listenManual(generalPreferencesProvider.select((prefs) => prefs.locale), (_, locale) {
       Intl.defaultLocale = (locale ?? getSystemLocale(WidgetsBinding.instance)).toLanguageTag();
@@ -150,7 +120,7 @@ class _AppState() extends ConsumerState<Application> {
         CupertinoLocalizationsEo.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
-      title: 'lichess.org',
+      title: 'TwoStones',
       locale: themeConfig.$5,
       theme: theme.copyWith(
         navigationBarTheme: isIOS

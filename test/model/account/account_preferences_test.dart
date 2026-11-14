@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lichess_mobile/src/model/account/account_preferences.dart';
-import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/settings/preferences_storage.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 
@@ -14,27 +13,38 @@ import '../../test_container.dart';
 import '../../test_helpers.dart';
 import '../auth/fake_auth_storage.dart';
 
-/// Builds a valid `/api/account/preferences` server response, with the `zen` and `favFed` values
-/// overridable so tests can assert parsing and refetching.
-String prefsResponse({int zen = 0, String? favFed}) =>
+/// Builds a valid `/api/account/preferences` server response, with the `zen` value overridable
+/// so tests can assert parsing and refetching.
+String prefsResponse({int zen = 0}) =>
     '''
 {
   "prefs": {
-    "autoQueen": 2,
-    "autoThreefold": 2,
+    "bgImg": "http://example.com",
+    "theme": "wood",
+    "pieceSet": "stones",
+    "soundSet": "standard",
     "takeback": 3,
     "moretime": 3,
     "clockTenths": 1,
+    "clockBar": true,
     "clockSound": true,
-    "premove": true,
+    "animation": 2,
+    "captured": true,
     "follow": true,
+    "highlight": true,
+    "destination": true,
+    "coords": 2,
+    "replay": 2,
     "challenge": 4,
     "message": 3,
     "submitMove": 4,
     "confirmResign": 1,
+    "voiceMove": false,
     "zen": $zen,
-    "pieceNotation": 0,
-    "ratings": 1${favFed != null ? ',\n    "favFed": "$favFed"' : ''}
+    "ratings": 1,
+    "moveEvent": 2,
+    "flairs": true,
+    "sayGG": 0
   },
   "language": "en-GB"
 }
@@ -46,7 +56,6 @@ void main() {
       final prefs = defaultAccountPreferences.copyWith(
         showRatings: ShowRatings.no,
         clockSound: const BooleanPref(false),
-        favoriteFederation: const FederationId('FRA'),
       );
 
       // Encode the way local storage does, then inspect the primitive JSON.
@@ -60,7 +69,6 @@ void main() {
 
       expect(decoded.showRatings, ShowRatings.no);
       expect(decoded.clockSound.value, isFalse);
-      expect(decoded.favoriteFederation, const FederationId('FRA'));
     });
 
     test('falls back to defaults on malformed json', () {
@@ -81,7 +89,6 @@ void main() {
       final binding = TestLichessBinding.ensureInitialized();
       final stored = defaultAccountPreferences.copyWith(
         showRatings: ShowRatings.no,
-        pieceNotation: PieceNotation.letter,
         clockSound: const BooleanPref(false),
         submitMove: SubmitMove({SubmitMoveChoice.blitz, SubmitMoveChoice.rapid}),
       );
@@ -94,7 +101,6 @@ void main() {
       final prefs = await container.read(accountPreferencesProvider.future);
 
       expect(prefs.showRatings, ShowRatings.no);
-      expect(prefs.pieceNotation, PieceNotation.letter);
       expect(prefs.clockSound.value, isFalse);
       expect(prefs.submitMove.choices, {SubmitMoveChoice.blitz, SubmitMoveChoice.rapid});
     });
@@ -154,14 +160,10 @@ void main() {
       await container.read(accountPreferencesProvider.notifier).setShowRatings(ShowRatings.no);
       await container
           .read(accountPreferencesProvider.notifier)
-          .setPieceNotation(PieceNotation.letter);
-      await container
-          .read(accountPreferencesProvider.notifier)
           .setClockSound(const BooleanPref(false));
       await container.read(accountPreferencesProvider.notifier).setClockTenths(ClockTenths.always);
 
       expect(await container.read(showRatingsPrefProvider.future), ShowRatings.no);
-      expect(await container.read(pieceNotationProvider.future), PieceNotation.letter);
       expect(await container.read(clockSoundProvider.future), isFalse);
       expect(await container.read(clockTenthsProvider.future), ClockTenths.always);
     });
@@ -187,10 +189,9 @@ void main() {
 
       final prefs = await container.read(accountPreferencesProvider.future);
 
-      expect(prefs.autoQueen, AutoQueen.premove);
+      expect(prefs.takeback, Takeback.always);
       expect(prefs.challenge, Challenge.registered);
       expect(prefs.showRatings, ShowRatings.yes);
-      expect(prefs.favoriteFederation, isNull);
     });
 
     test('falls back to defaults when the server request fails', () async {

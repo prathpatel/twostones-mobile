@@ -93,11 +93,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.textContaining('libre, no-ads, open source chess server.', findRichText: true),
+        find.textContaining('libre, no-ads, open source Go server.', findRichText: true),
         findsOneWidget,
       );
       expect(find.text('Sign in'), findsOneWidget);
-      expect(find.text('About Lichess...'), findsOneWidget);
+      expect(find.text('About TwoStones...'), findsOneWidget);
     });
 
     testWidgets('authUser, no played game: do not show welcome screen', (tester) async {
@@ -129,7 +129,7 @@ void main() {
 
       expect(nbUserGamesRequests, 1);
       expect(find.text('Sign in'), findsNothing);
-      expect(find.text('About Lichess...'), findsNothing);
+      expect(find.text('About TwoStones...'), findsNothing);
     });
 
     testWidgets('no authUser, with stored games: shows list of recent games', (tester) async {
@@ -160,7 +160,7 @@ void main() {
       // wait for connectivity
       await tester.pumpAndSettle();
 
-      expect(find.text('About Lichess...'), findsNothing);
+      expect(find.text('About TwoStones...'), findsNothing);
       expect(find.text('Recent games'), findsOneWidget);
       expect(find.byType(GameListTile), findsNWidgets(3));
       expect(find.text('Anonymous'), findsNWidgets(3));
@@ -194,7 +194,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(nbUserGamesRequests, 1);
-      expect(find.text('About Lichess...'), findsNothing);
+      expect(find.text('About TwoStones...'), findsNothing);
       expect(find.text('Recent games'), findsOneWidget);
       expect(find.byType(GameListTile), findsNWidgets(3));
       expect(find.text('MightyNanook'), findsOneWidget);
@@ -228,7 +228,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(nbOngoingGamesRequests, 1);
-      expect(find.text('About Lichess...'), findsNothing);
+      expect(find.text('About TwoStones...'), findsNothing);
       expect(find.text('Recent games'), findsNothing);
       expect(find.text('1 game in play'), findsOneWidget);
       expect(find.byType(OngoingGameCarouselItem), findsOneWidget);
@@ -298,7 +298,7 @@ void main() {
       // wait for connectivity
       await tester.pumpAndSettle();
 
-      expect(find.text('About Lichess...'), findsNothing);
+      expect(find.text('About TwoStones...'), findsNothing);
       expect(find.text('Recent games'), findsOneWidget);
       expect(find.byType(GameListTile), findsNWidgets(3));
       expect(find.text('Anonymous'), findsNWidgets(3));
@@ -322,7 +322,7 @@ void main() {
       // wait for connectivity
       await tester.pumpAndSettle();
 
-      expect(find.text('About Lichess...'), findsNothing);
+      expect(find.text('About TwoStones...'), findsNothing);
       expect(find.text('Recent games'), findsOneWidget);
       expect(find.byType(GameListTile), findsNWidgets(3));
     });
@@ -483,10 +483,8 @@ void main() {
       await tester.pumpWidget(app);
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Lichess is down'), findsOneWidget);
+      expect(find.textContaining('TwoStones is down'), findsOneWidget);
       expect(find.textContaining('scheduled maintenance'), findsNothing);
-      // The website shows this drawing on its outage page; mirror that.
-      expect(imageAssetNames(tester), contains('assets/images/maintenance.webp'));
     });
 
     testWidgets('a 503 shows the maintenance message', (tester) async {
@@ -506,9 +504,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('scheduled maintenance'), findsOneWidget);
-      expect(find.textContaining('Lichess is down'), findsNothing);
-      // The website's maintenance page has no drawing, only the logo.
-      expect(imageAssetNames(tester), isNot(contains('assets/images/maintenance.webp')));
+      expect(find.textContaining('TwoStones is down'), findsNothing);
     });
   });
 

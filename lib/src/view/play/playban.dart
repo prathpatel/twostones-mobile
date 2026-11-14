@@ -68,7 +68,7 @@ class const PlaybanMessage({
           child: Text(context.l10n.why, style: const TextStyle(fontSize: 20.0)),
         ),
         const SizedBox(height: 6.0),
-        Text(context.l10n.pleasantChessExperience),
+        const Text('We aim to provide a pleasant Go experience for everyone.'),
         Text(context.l10n.goodPractice),
         Text(context.l10n.potentialProblem),
         const SizedBox(height: 6.0),
@@ -109,7 +109,7 @@ class const PlaybanMessage({
             text: context.l10n.temporaryInconvenience,
             children: [
               const TextSpan(text: ' '),
-              TextSpan(text: context.l10n.wishYouGreatGames),
+              const TextSpan(text: 'and wish you great games on twostones.org.'),
               const TextSpan(text: ' '),
               TextSpan(text: context.l10n.thankYouForReading),
             ],

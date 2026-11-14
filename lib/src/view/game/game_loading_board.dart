@@ -321,7 +321,7 @@ class _OpenChallengeLoadingContentState() extends ConsumerState<OpenChallengeLoa
                             },
                           ),
                         ),
-                        label: Text(context.l10n.challengeInviteLichessUser.replaceAll(':', '')),
+                        label: const Text('Or invite a TwoStones user'),
                         icon: const Icon(Icons.person_search),
                       ),
 

@@ -122,7 +122,7 @@ class const PatronIcon({final int? color, final double? size, super.key}) extend
                 : patronColorsLight[(color! - 1)]
           : null,
       size: size ?? textStyle.fontSize,
-      semanticLabel: context.l10n.patronLichessPatron,
+      semanticLabel: 'TwoStones Patron',
     );
   }
 

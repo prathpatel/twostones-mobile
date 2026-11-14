@@ -36,10 +36,6 @@ extension type const GameFullId._(String value) implements StringId, GameAnyId {
   new fromJson(dynamic json) : this(json as String);
 }
 
-extension type const PuzzleId(String value) implements StringId {
-  new fromJson(dynamic json) : this(json as String);
-}
-
 extension type const UserId(String value) implements StringId {
   new fromUserName(String userName) : this(userName.toLowerCase());
   new fromJson(dynamic json) : this(json as String);
@@ -49,35 +45,6 @@ extension type const ChallengeId(String value) implements StringId {
   new fromJson(dynamic json) : this(json as String);
 
   bool get isValid => _gameOrChallengeIdRegex.hasMatch(value);
-}
-
-extension type const BroadcastTournamentId(String value) implements StringId;
-
-extension type const BroadcastRoundId(String value) implements StringId;
-
-extension type const BroadcastGameId(String value) implements StringId;
-
-extension type const StudyId(String value) implements StringId {
-  new fromJson(dynamic json) : this(json as String);
-}
-
-extension type const TournamentId(String value) implements StringId {
-  new fromJson(dynamic json) : this(json as String);
-}
-
-extension type const TeamId(String value) implements StringId {
-  new fromJson(dynamic json) : this(json as String);
-}
-
-extension type const StudyChapterId(String value) implements StringId {
-  new fromJson(dynamic json) : this(json as String);
-}
-
-extension type const FideId(int value) implements IntId;
-
-extension type const FederationId(String value) implements StringId {
-  new fromCode(String code) : this(code.toUpperCase());
-  new fromJson(dynamic json) : this(json as String);
 }
 
 extension IDPick on Pick {
@@ -149,23 +116,6 @@ extension IDPick on Pick {
     }
   }
 
-  PuzzleId asPuzzleIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return PuzzleId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to PuzzleId");
-  }
-
-  PuzzleId? asPuzzleIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asPuzzleIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
   ChallengeId asChallengeIdOrThrow() {
     final value = required().value;
     if (value is String) {
@@ -178,133 +128,6 @@ extension IDPick on Pick {
     if (value == null) return null;
     try {
       return asChallengeIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  BroadcastTournamentId asBroadcastTournamentIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return BroadcastTournamentId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to BroadcastTournamentId");
-  }
-
-  BroadcastTournamentId? asBroadcastTournamentIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asBroadcastTournamentIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  BroadcastRoundId asBroadcastRoundIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return BroadcastRoundId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to BroadcastRoundId");
-  }
-
-  BroadcastRoundId? asBroadcastRoundIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asBroadcastRoundIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  BroadcastGameId asBroadcastGameIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return BroadcastGameId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to BroadcastGameId");
-  }
-
-  BroadcastGameId? asBroadcastGameIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asBroadcastGameIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  TeamId? asTeamIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asTeamIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  TeamId asTeamIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return TeamId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to TeamId");
-  }
-
-  StudyId asStudyIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return StudyId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to StudyId");
-  }
-
-  FideId asFideIdOrThrow() {
-    final value = required().value;
-    if (value is int && value != 0) {
-      return FideId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to FideId");
-  }
-
-  FideId? asFideIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asFideIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  FederationId asFederationIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return FederationId.fromCode(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to FederationId");
-  }
-
-  FederationId? asFederationIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asFederationIdOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  TournamentId asTournamentIdOrThrow() {
-    final value = required().value;
-    if (value is String) {
-      return TournamentId(value);
-    }
-    throw PickException.fromPick(this, "can't be casted to TournamentId");
-  }
-
-  TournamentId? asTournamentIdOrNull() {
-    if (value == null) return null;
-    try {
-      return asTournamentIdOrThrow();
     } catch (_) {
       return null;
     }

@@ -165,7 +165,7 @@ class _EditProfileFormState() extends ConsumerState<_EditProfileForm> {
             initialValue: widget.user.profile?.bio,
             formKey: 'bio',
             formData: widget.formData,
-            description: context.l10n.biographyDescription,
+            description: 'Talk about yourself, your interests, what you like in Go, your favourite openings, players, ...',
             maxLength: 400,
             maxLines: 6,
             textInputAction: TextInputAction.newline,
@@ -422,8 +422,7 @@ class _EditProfileFormState() extends ConsumerState<_EditProfileForm> {
             maxLength: 3000,
             maxLines: 4,
             textInputAction: TextInputAction.newline,
-            description:
-                'Mastodon, Facebook, GitHub, Chess.com, ...\r\n${context.l10n.oneUrlPerLine}',
+            description: 'Mastodon, Facebook, GitHub, ...\r\n${context.l10n.oneUrlPerLine}',
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24.0),

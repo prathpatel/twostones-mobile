@@ -6,7 +6,6 @@ import 'package:lichess_mobile/src/binding/binding.dart';
 import 'package:lichess_mobile/src/model/account/account_pref_types.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
-import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/settings/preferences_storage.dart';
 
 export 'account_pref_types.dart';
@@ -14,7 +13,7 @@ export 'account_pref_types.dart';
 /// Represents the account preferences for a user.
 ///
 /// If the user is authenticated, the preferences are fetched from the server. If the user is not authenticated, the preferences are fetched from local storage.
-/// Technically an anonymous user does not have account preferences, but we still store them locally for convenience, because some settings are useful even for anonymous users (e.g. piece notation, premoves, etc.).
+/// Technically an anonymous user does not have account preferences, but we still store them locally for convenience, because some settings are useful even for anonymous users (e.g. zen mode, clock display, etc.).
 
 /// A provider that tells if the user wants to see ratings in the app.
 final showRatingsPrefProvider = FutureProvider<ShowRatings>((Ref ref) async {
@@ -26,12 +25,6 @@ final showRatingsPrefProvider = FutureProvider<ShowRatings>((Ref ref) async {
 final clockSoundProvider = FutureProvider<bool>((Ref ref) async {
   final prefs = await ref.watch(accountPreferencesProvider.future);
   return prefs.clockSound.value;
-});
-
-/// A provider that gives the user's preferred piece notation.
-final pieceNotationProvider = FutureProvider<PieceNotation>((Ref ref) async {
-  final prefs = await ref.watch(accountPreferencesProvider.future);
-  return prefs.pieceNotation;
 });
 
 /// A provider that gives the user's preferred clock tenths display.
@@ -72,19 +65,11 @@ class AccountPreferences() extends AsyncNotifier<AccountPrefState> {
 
   Future<void> setZen(Zen value) =>
       _setPref('zen', value, (prefs) => prefs.copyWith(zenMode: value));
-  Future<void> setPieceNotation(PieceNotation value) =>
-      _setPref('pieceNotation', value, (prefs) => prefs.copyWith(pieceNotation: value));
   Future<void> setShowRatings(ShowRatings value) =>
       _setPref('ratings', value, (prefs) => prefs.copyWith(showRatings: value));
 
-  Future<void> setPremove(BooleanPref value) =>
-      _setPref('premove', value, (prefs) => prefs.copyWith(premove: value));
   Future<void> setTakeback(Takeback value) =>
       _setPref('takeback', value, (prefs) => prefs.copyWith(takeback: value));
-  Future<void> setAutoQueen(AutoQueen value) =>
-      _setPref('autoQueen', value, (prefs) => prefs.copyWith(autoQueen: value));
-  Future<void> setAutoThreefold(AutoThreefold value) =>
-      _setPref('autoThreefold', value, (prefs) => prefs.copyWith(autoThreefold: value));
   Future<void> setMoretime(Moretime value) =>
       _setPref('moretime', value, (prefs) => prefs.copyWith(moretime: value));
   Future<void> setClockTenths(ClockTenths value) =>
@@ -101,11 +86,6 @@ class AccountPreferences() extends AsyncNotifier<AccountPrefState> {
       _setPref('challenge', value, (prefs) => prefs.copyWith(challenge: value));
   Future<void> setMessage(Message value) =>
       _setPref('message', value, (prefs) => prefs.copyWith(message: value));
-  Future<void> setFavoriteFederation(FederationId? value) => _setPref(
-    'favFed',
-    FavoriteFederation(value),
-    (prefs) => prefs.copyWith(favoriteFederation: value),
-  );
 
   Future<void> _setPref<T>(
     String key,

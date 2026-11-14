@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:collection/collection.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -8,7 +7,6 @@ import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
-import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/user/user.dart' show TemporaryBan;
 import 'package:lichess_mobile/src/utils/json.dart';
 import 'package:lichess_mobile/src/utils/l10n.dart' show relativeDate;
@@ -28,9 +26,7 @@ enum NotificationChannel(final Importance importance) {
   challenge(.high), // only real time challenges get high importance
   corresChallengeAccept(.defaultImportance),
   corresChallengeCreate(.defaultImportance),
-  announce(.defaultImportance),
-  broadcast(.defaultImportance),
-  recap(.defaultImportance);
+  announce(.defaultImportance);
 
   /// The localized name of the channel, shown in the system notification settings.
   String label(AppLocalizations l10n) => switch (this) {
@@ -39,10 +35,8 @@ enum NotificationChannel(final Importance importance) {
     corresGameUpdate ||
     corresChallengeAccept ||
     corresChallengeCreate => l10n.preferencesNotifyGameEvent,
-    announce => 'Lichess Announcements',
+    announce => 'TwoStones announcements',
     challenge => l10n.preferencesNotifyChallenge,
-    broadcast => l10n.broadcastBroadcasts,
-    recap => 'Annual recap',
   };
 
   /// The notification priority matching the channel [importance].
@@ -139,42 +133,6 @@ sealed class const FcmMessage() {
           } else {
             return MalformedFcmMessage(message.data);
           }
-        case 'broadcast':
-          final rawUrl = message.data['lichess.url'] as String?;
-          if (rawUrl == null) return MalformedFcmMessage(message.data);
-          final url = Uri.tryParse(rawUrl);
-          switch (url) {
-            case Uri(pathSegments: ['broadcast', _, _, final roundId]):
-              return BroadcastRoundFcmMessage(
-                BroadcastRoundId(roundId),
-                notification: message.notification,
-              );
-            case Uri(
-              pathSegments: ['broadcast', _, _, final roundId, final gameId],
-              queryParameters: {'pov': final pov},
-            ):
-              final side = Side.values.firstWhereOrNull((s) => s.name == pov);
-              if (side == null) {
-                return MalformedFcmMessage(message.data);
-              }
-
-              return BroadcastPlayerFollowFcmMessage(
-                BroadcastRoundId(roundId),
-                BroadcastGameId(gameId),
-                side,
-                notification: message.notification,
-              );
-            case _:
-              return MalformedFcmMessage(message.data);
-          }
-        case 'recap':
-          final rawYear = message.data['lichess.year'] as String?;
-          final year = rawYear == null ? null : int.tryParse(rawYear);
-          if (year != null) {
-            return RecapFcmMessage(year, notification: message.notification);
-          } else {
-            return MalformedFcmMessage(message.data);
-          }
         default:
           return UnhandledFcmMessage(message.data);
       }
@@ -195,9 +153,6 @@ sealed class const FcmMessage() {
     final CorresChallengeAcceptFcmMessage m => CorresChallengeAcceptedNotification.fromFcmMessage(
       m,
     ),
-    final BroadcastRoundFcmMessage m => BroadcastRoundNotification.fromFcmMessage(m),
-    final BroadcastPlayerFollowFcmMessage m => BroadcastPlayerFollowNotification.fromFcmMessage(m),
-    final RecapFcmMessage m => RecapNotification.fromFcmMessage(m),
     UnhandledFcmMessage() || MalformedFcmMessage() => null,
   };
 }
@@ -238,29 +193,6 @@ class const CorresChallengeCreateFcmMessage(
 class const CorresChallengeAcceptFcmMessage(
   final ChallengeId id,
   final GameFullId fullId, {
-  @override required final RemoteNotification? notification,
-}) extends FcmMessage;
-
-/// An [FcmMessage] sent when a broadcast round a user subscribed to starts.
-@immutable
-class const BroadcastRoundFcmMessage(
-  final BroadcastRoundId roundId, {
-  @override required final RemoteNotification? notification,
-}) extends FcmMessage;
-
-/// An [FcmMessage] sent when a followed player starts a broadcast game.
-@immutable
-class const BroadcastPlayerFollowFcmMessage(
-  final BroadcastRoundId roundId,
-  final BroadcastGameId gameId,
-  final Side pov, {
-  @override required final RemoteNotification? notification,
-}) extends FcmMessage;
-
-/// An [FcmMessage] sent when the year-end recap is ready.
-@immutable
-class const RecapFcmMessage(
-  final int year, {
   @override required final RemoteNotification? notification,
 }) extends FcmMessage;
 
@@ -359,12 +291,6 @@ sealed class const LocalNotification() {
         return CorresChallengeCreatedNotification.fromJson(json);
       case 'announce':
         return AnnounceNotification.fromJson(json);
-      case 'broadcastRound':
-        return BroadcastRoundNotification.fromJson(json);
-      case 'broadcastPlayerFollow':
-        return BroadcastPlayerFollowNotification.fromJson(json);
-      case 'recap':
-        return RecapNotification.fromJson(json);
       default:
         throw ArgumentError('Unknown notification payload type: $type');
     }
@@ -792,152 +718,4 @@ class const ChallengeNotification(final Challenge challenge) extends LocalNotifi
           DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
         },
       );
-}
-
-/// A notification for when a broadcast round starts.
-///
-/// This notification is shown when a broadcast round the user subscribed to starts.
-class const BroadcastRoundNotification(
-  final BroadcastRoundId roundId,
-  final String _title,
-  final String _body,
-) extends LocalNotification {
-  factory fromJson(Map<String, dynamic> json) {
-    final roundId = BroadcastRoundId(json['roundId'] as String);
-    final title = json['title'] as String;
-    final body = json['body'] as String;
-    return BroadcastRoundNotification(roundId, title, body);
-  }
-
-  factory fromFcmMessage(BroadcastRoundFcmMessage broadcast) {
-    return BroadcastRoundNotification(
-      broadcast.roundId,
-      broadcast.notification?.title ?? '',
-      broadcast.notification?.body ?? '',
-    );
-  }
-
-  @override
-  NotificationChannel get channel => .broadcast;
-
-  @override
-  String get payloadType => 'broadcastRound';
-
-  @override
-  int get id => roundId.hashCode;
-
-  @override
-  Map<String, dynamic> get _concretePayload => {
-    'roundId': roundId.value,
-    'title': _title,
-    'body': _body,
-  };
-
-  @override
-  String title(_) => _title;
-
-  @override
-  String? body(_) => _body;
-
-  @override
-  NotificationDetails details(AppLocalizations l10n) => NotificationDetails(
-    android: _androidDetails(l10n),
-    iOS: DarwinNotificationDetails(threadIdentifier: channelId),
-  );
-}
-
-/// A notification for when a followed player starts a broadcast game.
-///
-/// This notification is shown when a FIDE player followed by the user begins a game in a broadcast.
-class const BroadcastPlayerFollowNotification(
-  final BroadcastRoundId roundId,
-  final BroadcastGameId gameId,
-  final Side pov,
-  final String _title,
-  final String _body,
-) extends LocalNotification {
-  factory fromJson(Map<String, dynamic> json) {
-    final roundId = BroadcastRoundId(json['roundId'] as String);
-    final gameId = BroadcastGameId(json['gameId'] as String);
-    final pov = Side.values.byName(json['pov'] as String);
-    final title = json['title'] as String;
-    final body = json['body'] as String;
-    return BroadcastPlayerFollowNotification(roundId, gameId, pov, title, body);
-  }
-
-  factory fromFcmMessage(BroadcastPlayerFollowFcmMessage broadcast) {
-    return BroadcastPlayerFollowNotification(
-      broadcast.roundId,
-      broadcast.gameId,
-      broadcast.pov,
-      broadcast.notification?.title ?? '',
-      broadcast.notification?.body ?? '',
-    );
-  }
-
-  @override
-  NotificationChannel get channel => .broadcast;
-
-  @override
-  String get payloadType => 'broadcastPlayerFollow';
-
-  @override
-  int get id => gameId.hashCode;
-
-  @override
-  Map<String, dynamic> get _concretePayload => {
-    'roundId': roundId.value,
-    'gameId': gameId.value,
-    'pov': pov.name,
-    'title': _title,
-    'body': _body,
-  };
-
-  @override
-  String title(_) => _title;
-
-  @override
-  String? body(_) => _body;
-
-  @override
-  NotificationDetails details(AppLocalizations l10n) => NotificationDetails(
-    android: _androidDetails(l10n),
-    iOS: DarwinNotificationDetails(threadIdentifier: channelId),
-  );
-}
-
-/// A notification for the year-end recap
-///
-/// This notification is shown when the year-end recap is received from the server
-class const RecapNotification(final int year) extends LocalNotification {
-  factory fromJson(Map<String, dynamic> json) {
-    final year = json['year'] as int;
-    return RecapNotification(year);
-  }
-
-  factory fromFcmMessage(RecapFcmMessage message) {
-    return RecapNotification(message.year);
-  }
-
-  @override
-  NotificationChannel get channel => .recap;
-
-  @override
-  String get payloadType => 'recap';
-
-  @override
-  int get id => year.hashCode;
-
-  @override
-  Map<String, dynamic> get _concretePayload => {'year': year};
-
-  @override
-  String title(AppLocalizations l10n) => l10n.recapRecapReady(year.toString());
-
-  @override
-  String body(AppLocalizations l10n) => l10n.recapAwaitQuestion;
-
-  @override
-  NotificationDetails details(AppLocalizations l10n) =>
-      NotificationDetails(android: _androidDetails(l10n));
 }

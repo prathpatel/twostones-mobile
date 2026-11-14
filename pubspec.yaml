@@ -1,5 +1,5 @@
 name: lichess_mobile
-description: Lichess mobile app V2
+description: TwoStones, the Go app of twostones.org
 publish_to: "none"
 
 version: 0.31.8+003108 # See README.md for details about versioning
@@ -47,7 +47,6 @@ dependencies:
   flutter_slidable: ^5.2.0
   flutter_spinkit: ^5.2.2
   freezed_annotation: ^3.1.0
-  home_widget: ^0.10.0
   http: ^1.6.0
   image_picker: ^1.2.4
   intl: ^0.20.3
@@ -98,18 +97,12 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/images/stockfish/
-    - assets/images/fide-fed/
-    - assets/images/learn/
-    - assets/images/learn/pieces/
-    - assets/images/practice/
     - assets/sounds/futuristic/
     - assets/sounds/lisp/
     - assets/sounds/nes/
     - assets/sounds/piano/
     - assets/sounds/standard/
     - assets/sounds/sfx/
-    - assets/board-thumbnails/
 
   fonts:
     - family: LichessIcons
@@ -118,12 +111,6 @@ flutter:
     - family: SocialIcons
       fonts:
         - asset: assets/fonts/SocialIcons.ttf
-    - family: ChessFont
-      fonts:
-        - asset: assets/fonts/ChessSansPiratf.ttf
-    - family: LichessPuzzleIcons
-      fonts:
-        - asset: assets/fonts/PuzzleIcons.ttf
 
   # Enable generation of localized Strings from arb files.
   generate: true

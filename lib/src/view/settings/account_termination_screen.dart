@@ -259,7 +259,7 @@ class _AccountTerminationScreenState() extends ConsumerState<AccountTerminationS
               const SizedBox(height: 8.0),
               Text(
                 _isDelete
-                    ? context.l10n.settingsDeleteAccountWarning
+                    ? "Once you delete your account, it's removed from TwoStones and our administrators won't be able to bring it back for you."
                     : context.l10n.settingsCloseAccountAreYouSure,
                 style: TextTheme.of(context).bodyLarge,
               ),

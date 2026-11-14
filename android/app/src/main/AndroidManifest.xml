@@ -8,7 +8,7 @@
         android:largeScreens="true"
         android:xlargeScreens="true"/>
     <application
-        android:label="Lichess"
+        android:label="TwoStones"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -42,45 +42,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:mimeType="application/x-chess-pgn" />
-                <data android:mimeType="application/vnd.chess-pgn" />
-                <data android:mimeType="text/x-chess-pgn" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="content" />
-
-                <data android:pathSuffix=".pgn" />
-            </intent-filter>
-            <intent-filter>
-               <action android:name="android.intent.action.SEND" />
-               <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/x-chess-pgn" />
-                <data android:mimeType="application/vnd.chess-pgn" />
-                <data android:mimeType="text/x-chess-pgn" />
-            </intent-filter>
-
-            <!-- App Links verified against https://lichess.org/.well-known/assetlinks.json -->
+            <!-- App Links verified against https://twostones.org/.well-known/assetlinks.json -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="https" android:host="lichess.org" />
+                <data android:scheme="https" android:host="twostones.org" />
 
-                <data android:pathPattern="/training/....." />
-                <data android:pathPattern="/study/........" />
-                <data android:pathPattern="/study/......../........" />
-                <data android:pathPattern="/tournament/........" />
 
                 <!--
                   User profile links: /@/<username> where usernames are 2–30 chars.
@@ -118,14 +87,6 @@
                 <data android:pathPattern="/@/............................" />
                 <data android:pathPattern="/@/............................." />
                 <data android:pathPattern="/@/.............................." />
-                <data android:pathPattern="/tv/.*" />
-
-                <data android:pathPattern="/broadcast/.*/.*/........" />
-                <data android:pathPattern="/broadcast/.*/.*/......../........" />
-
-                <!-- Board editor: bare /editor and /editor/<fen> (FEN ranks contain '/'). -->
-                <data android:pathPattern="/editor" />
-                <data android:pathPattern="/editor/.*" />
 
                 <!-- Game or challenge link: /game/<id>, optionally with a color POV. -->
                 <data android:pathPattern="/game/........" />
@@ -165,30 +126,6 @@
 
         <receiver android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"/>
-
-        <receiver android:name=".widgets.BroadcastWidgetProvider"
-            android:label="@string/broadcast_title"
-            android:exported="true"
-            android:permission="android.permission.BIND_APPWIDGET">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_broadcast_info" />
-        </receiver>
-
-        <receiver android:name=".widgets.DailyPuzzleWidgetProvider"
-            android:label="@string/daily_puzzle_title"
-            android:exported="true"
-            android:permission="android.permission.BIND_APPWIDGET">
-            <intent-filter>
-              <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-            </intent-filter>
-            <meta-data
-              android:name="android.appwidget.provider"
-              android:resource="@xml/widget_daily_puzzle_info"/>
-        </receiver>
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

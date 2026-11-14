@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:lichess_mobile/src/network/http.dart';
 import 'package:lichess_mobile/src/network/socket.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
@@ -60,7 +61,7 @@ class const SocketPingRatingListTile({final Uri? socketUri, super.key}) extends 
             ),
       enabled: ping.averageLag > Duration.zero,
       onTap: () {
-        launchUrl(Uri.parse('https://lichess.org/lag'));
+        launchUrl(lichessUri('/lag'));
       },
     );
   }

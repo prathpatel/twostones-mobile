@@ -1,7 +1,6 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/gestures.dart';
-import 'package:lichess_mobile/src/styles/lichess_icons.dart';
-import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/network/http.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,9 +12,9 @@ class const AppBarLichessTitle({super.key, final double iconSize = 24}) extends 
         children: [
           WidgetSpan(
             alignment: .bottom,
-            child: Icon(LichessIcons.logo_lichess, size: iconSize),
+            child: TwoStonesLogo(size: iconSize),
           ),
-          const TextSpan(text: ' lichess'),
+          const TextSpan(text: ' twostones'),
           TextSpan(
             text: '.org',
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
@@ -23,6 +22,20 @@ class const AppBarLichessTitle({super.key, final double iconSize = 24}) extends 
         ],
       ),
       maxLines: 1,
+    );
+  }
+}
+
+/// The TwoStones logo: a black and a white stone, drawn for the current brightness.
+class const TwoStonesLogo({final double size = 24, super.key}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Image.asset(
+      isDark ? 'assets/images/logo-white.webp' : 'assets/images/logo-black.webp',
+      width: size,
+      height: size,
+      semanticLabel: 'TwoStones',
     );
   }
 }
@@ -77,12 +90,12 @@ class _LichessMessageState() extends State<LichessMessage> {
   }
 
   void _handleTap() {
-    launchUrl(Uri.parse('https://lichess.org/features'));
+    launchUrl(lichessUri('/about'));
   }
 
   @override
   Widget build(BuildContext context) {
-    final trans = context.l10n.xIsAFreeYLibreOpenSourceChessServer('Lichess', context.l10n.really);
+    const trans = 'TwoStones is a free (really), libre, no-ads, open source Go server.';
     final regexp = RegExp(r'''^([^(]*\()([^)]*)(\).*)$''');
     final match = regexp.firstMatch(trans);
     final List<TextSpan> spans = [];
@@ -97,7 +110,7 @@ class _LichessMessageState() extends State<LichessMessage> {
         );
       }
     } else {
-      spans.add(TextSpan(text: trans));
+      spans.add(const TextSpan(text: trans));
     }
 
     return MergeSemantics(

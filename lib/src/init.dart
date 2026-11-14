@@ -62,7 +62,7 @@ Future<void> initializeLocalNotifications(Locale locale) async {
   final plugin = FlutterLocalNotificationsPlugin();
   await plugin.initialize(
     settings: InitializationSettings(
-      android: const AndroidInitializationSettings('logo_black'),
+      android: const AndroidInitializationSettings('ic_stat_lichess_notification'),
       iOS: DarwinInitializationSettings(
         requestBadgePermission: false,
         notificationCategories: <DarwinNotificationCategory>[

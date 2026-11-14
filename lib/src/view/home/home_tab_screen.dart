@@ -18,6 +18,7 @@ import 'package:lichess_mobile/src/model/message/message_repository.dart';
 import 'package:lichess_mobile/src/model/relation/following_user.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
+import 'package:lichess_mobile/src/network/http.dart';
 import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
@@ -169,24 +170,12 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                     const Center(child: _SignInWidget()),
                     const SizedBox(height: 16.0),
                   ],
-                  if (Theme.of(context).platform != TargetPlatform.iOS &&
-                      (authUser == null || authUser.user.isPatron != true)) ...[
-                    Center(
-                      child: FilledButton.tonal(
-                        onPressed: () {
-                          launchUrl(Uri.parse('https://lichess.org/patron'));
-                        },
-                        child: Text(context.l10n.patronDonate),
-                      ),
-                    ),
-                    const SizedBox(height: 16.0),
-                  ],
                   Center(
                     child: FilledButton.tonal(
                       onPressed: () {
-                        launchUrl(Uri.parse('https://lichess.org/about'));
+                        launchUrl(lichessUri('/about'));
                       },
-                      child: Text(context.l10n.aboutX('Lichess...')),
+                      child: Text(context.l10n.aboutX('TwoStones...')),
                     ),
                   ),
                   const _HomeCustomizationTip(),
@@ -405,7 +394,7 @@ class const _LichessMessageBanner() extends ConsumerWidget {
           child: Column(
             children: [
               Text(
-                context.l10n.showUnreadLichessMessage,
+                'You have received a private message from TwoStones.',
                 style: TextStyle(
                   color: theme.colorScheme.onTertiaryContainer,
                   fontWeight: FontWeight.bold,

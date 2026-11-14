@@ -108,8 +108,5 @@ enum LinkSite(final String title, final IList<String> domains) {
   github('GitHub', IListConst(['github.com'])),
   gitlab('GitLab', IListConst(['gitlab.com'])),
   vkontakte('VKontakte', IListConst(['vk.com'])),
-  chessCom('Chess.com', IListConst(['chess.com'])),
-  chessMonitor('ChessMonitor', IListConst(['chessmonitor.com'])),
-  chessTempo('ChessTempo', IListConst(['chesstempo.com'])),
   telegram('telegram.me', IListConst(['t.me', 'telegram.me'])),
 }

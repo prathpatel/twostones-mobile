@@ -37,7 +37,7 @@ class _BoardSettingsScreenState() extends ConsumerState<BoardSettingsScreen> {
       if (authUser != null && mounted) {
         showSnackBar(
           context,
-          context.l10n.mobileSettingsPreferencesSaved,
+          'Your preferences have been saved in your TwoStones account. They will be synchronized across all your devices.',
           type: SnackBarType.success,
         );
       }

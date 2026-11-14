@@ -1,7 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
-import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/settings/preferences_storage.dart';
 
 part 'account_pref_types.freezed.dart';
@@ -12,12 +11,8 @@ sealed class const AccountPrefState._() with _$AccountPrefState implements Seria
   const factory({
     // game display
     @JsonKey(unknownEnumValue: Zen.no) required Zen zenMode,
-    @JsonKey(unknownEnumValue: PieceNotation.symbol) required PieceNotation pieceNotation,
     @JsonKey(unknownEnumValue: ShowRatings.yes) required ShowRatings showRatings,
     // game behavior
-    required BooleanPref premove,
-    @JsonKey(unknownEnumValue: AutoQueen.premove) required AutoQueen autoQueen,
-    @JsonKey(unknownEnumValue: AutoThreefold.always) required AutoThreefold autoThreefold,
     @JsonKey(unknownEnumValue: Takeback.always) required Takeback takeback,
     required BooleanPref confirmResign,
     required SubmitMove submitMove,
@@ -29,8 +24,6 @@ sealed class const AccountPrefState._() with _$AccountPrefState implements Seria
     required BooleanPref follow,
     @JsonKey(unknownEnumValue: Challenge.registered) required Challenge challenge,
     @JsonKey(unknownEnumValue: Message.always) required Message message,
-    // broadcasts
-    FederationId? favoriteFederation,
   }) = _AccountPrefState;
 
   factory fromJson(Map<String, dynamic> json) {
@@ -44,11 +37,7 @@ sealed class const AccountPrefState._() with _$AccountPrefState implements Seria
 
 final defaultAccountPreferences = AccountPrefState(
   zenMode: Zen.no,
-  pieceNotation: PieceNotation.symbol,
   showRatings: ShowRatings.yes,
-  premove: const BooleanPref(true),
-  autoQueen: AutoQueen.premove,
-  autoThreefold: AutoThreefold.always,
   takeback: Takeback.always,
   moretime: Moretime.always,
   clockTenths: ClockTenths.lessThan10s,
@@ -63,13 +52,6 @@ final defaultAccountPreferences = AccountPrefState(
 abstract class AccountPref<T>() {
   T get value;
   String get toFormData;
-}
-
-/// The favorite FIDE federation, whose games are shown first in broadcast rounds.
-class const FavoriteFederation(@override final FederationId? value)
-    implements AccountPref<FederationId?> {
-  @override
-  String get toFormData => value?.value ?? '';
 }
 
 class const BooleanPref(@override final bool value) implements AccountPref<bool> {
@@ -167,108 +149,6 @@ enum ShowRatings(@override final int value) implements AccountPref<int> {
         return ShowRatings.exceptInGame;
       default:
         throw Exception('Invalid value for ShowRatings');
-    }
-  }
-}
-
-enum PieceNotation(@override final int value) implements AccountPref<int> {
-  @JsonValue(0)
-  symbol(0),
-  @JsonValue(1)
-  letter(1);
-
-  @override
-  String get toFormData => value.toString();
-
-  String label(AppLocalizations l10n) {
-    switch (this) {
-      case PieceNotation.symbol:
-        return l10n.preferencesChessPieceSymbol;
-      case PieceNotation.letter:
-        return l10n.preferencesPgnLetter;
-    }
-  }
-
-  static PieceNotation fromInt(int value) {
-    switch (value) {
-      case 0:
-        return PieceNotation.symbol;
-      case 1:
-        return PieceNotation.letter;
-      default:
-        throw Exception('Invalid value for PieceNotation');
-    }
-  }
-}
-
-enum AutoQueen(@override final int value) implements AccountPref<int> {
-  @JsonValue(1)
-  never(1),
-  @JsonValue(2)
-  premove(2),
-  @JsonValue(3)
-  always(3);
-
-  @override
-  String get toFormData => value.toString();
-
-  String label(AppLocalizations l10n) {
-    switch (this) {
-      case AutoQueen.never:
-        return l10n.never;
-      case AutoQueen.premove:
-        return l10n.preferencesWhenPremoving;
-      case AutoQueen.always:
-        return l10n.always;
-    }
-  }
-
-  static AutoQueen fromInt(int value) {
-    switch (value) {
-      case 1:
-        return AutoQueen.never;
-      case 2:
-        return AutoQueen.premove;
-      case 3:
-        return AutoQueen.always;
-      default:
-        throw Exception('Invalid value for AutoQueen');
-    }
-  }
-}
-
-enum AutoThreefold(@override final int value) implements AccountPref<int> {
-  @JsonValue(1)
-  never(1),
-  @JsonValue(2)
-  time(2),
-  @JsonValue(3)
-  always(3);
-
-  @override
-  String get toFormData => value.toString();
-
-  String label(AppLocalizations l10n) {
-    switch (this) {
-      case AutoThreefold.never:
-        return l10n.never;
-      case AutoThreefold.time:
-        return l10n.preferencesWhenTimeRemainingLessThanThirtySeconds;
-      case AutoThreefold.always:
-        return l10n.always;
-    }
-  }
-
-  static AutoThreefold fromInt(int value) {
-    switch (value) {
-      case 1:
-        return AutoThreefold.never;
-      case 2:
-        return AutoThreefold.time;
-      case 3:
-        return AutoThreefold.always;
-      default:
-        throw Exception('Invalid value for AutoThreefold');
     }
   }
 }

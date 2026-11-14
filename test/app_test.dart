@@ -78,7 +78,7 @@ void main() {
     // should see welcome message
     expect(
       find.text(
-        'Lichess is a free (really), libre, no-ads, open source chess server.',
+        'TwoStones is a free (really), libre, no-ads, open source Go server.',
         findRichText: true,
       ),
       findsOneWidget,

@@ -85,7 +85,7 @@ class _AccountPreferencesScreenState()
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Text(
-                context.l10n.mobileAccountPreferencesHelp,
+                'These preferences are applied to your TwoStones account and will be used across all devices.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -109,7 +109,7 @@ class _AccountPreferencesScreenState()
                       );
                     },
                   ),
-                  explanation: context.l10n.preferencesExplainShowPlayerRatings,
+                  explanation: 'Hides all ratings from TwoStones, to help you focus on the game.\nThis setting only affects what you see. Rated games will still impact your rating.',
                 ),
               ],
             ),
