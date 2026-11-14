@@ -11,9 +11,7 @@ enum HomeEditableWidget(
   perfCards(false),
   friends(false),
   ongoingGames(true),
-  blogCarousel(false),
   quickPairing(false),
-  featuredTournaments(false),
   recentGames(false);
 
   String label(AppLocalizations l10n) => switch (this) {
@@ -24,8 +22,6 @@ enum HomeEditableWidget(
     HomeEditableWidget.perfCards => 'Performance Cards',
     HomeEditableWidget.friends => l10n.friends,
     HomeEditableWidget.quickPairing => l10n.quickPairing,
-    HomeEditableWidget.featuredTournaments => l10n.openTournaments,
     HomeEditableWidget.recentGames => l10n.recentGames,
-    HomeEditableWidget.blogCarousel => l10n.blog,
   };
 }

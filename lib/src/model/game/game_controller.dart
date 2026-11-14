@@ -11,7 +11,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/src/binding/binding.dart';
 import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
 import 'package:lichess_mobile/src/model/chat/chat.dart';
 import 'package:lichess_mobile/src/model/chat/chat_mixin.dart';
@@ -1277,29 +1276,6 @@ sealed class const GameState._() with _$GameState, ChatMixinState {
 
     return null;
   }
-
-  String get analysisPgn => game.makePgn();
-
-  AnalysisOptions get analysisOptions => game.finished
-      ? AnalysisOptions.archivedGame(
-          orientation: game.youAre ?? Side.white,
-          initialMoveCursor: stepCursor,
-          gameId: gameFullId.gameId,
-        )
-      : game.playable && game.meta.speed == Speed.correspondence && game.youAre != null
-      ? AnalysisOptions.activeCorrespondenceGame(
-          orientation: game.youAre ?? Side.white,
-          initialMoveCursor: stepCursor,
-          gameFullId: gameFullId,
-        )
-      : AnalysisOptions.pgn(
-          id: gameFullId.gameId,
-          orientation: game.youAre ?? Side.white,
-          initialMoveCursor: stepCursor,
-          pgn: game.makePgn(),
-          variant: game.meta.variant,
-          isComputerAnalysisAllowed: false,
-        );
 
   GameChatOptions? get chatOptions =>
       chatDisabledViaPrefs || isZenModeActive || game.meta.tournament != null

@@ -19,20 +19,18 @@ import 'package:lichess_mobile/src/model/game/playable_game.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/model/user/user_repository_providers.dart';
 import 'package:lichess_mobile/src/styles/lichess_icons.dart';
-import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/chessboard.dart';
 import 'package:lichess_mobile/src/utils/focus_detector.dart';
 import 'package:lichess_mobile/src/utils/immersive_mode.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
 import 'package:lichess_mobile/src/view/chat/chat_screen.dart';
 import 'package:lichess_mobile/src/view/game/correspondence_clock_widget.dart';
 import 'package:lichess_mobile/src/view/game/game_loading_board.dart';
 import 'package:lichess_mobile/src/view/game/game_player.dart';
 import 'package:lichess_mobile/src/view/game/game_result_dialog.dart';
+import 'package:lichess_mobile/src/view/game/game_review_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/view/game/game_settings.dart';
-import 'package:lichess_mobile/src/view/tournament/tournament_screen.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_action_sheet.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/board.dart';
@@ -188,9 +186,12 @@ class const GameBody({
                 builder: (_) => GameResultDialog(
                   id: gameId,
                   onNewOpponentCallback: onNewOpponentCallback,
-                  onBackToTournamentCallback: (id) => _backToTournament(context, id),
-                  onAnalysisCallback: (options) =>
-                      Navigator.of(context).push(AnalysisScreen.buildRoute(options)),
+                  onReviewCallback: () => Navigator.of(context).push(
+                    GameReviewScreen.buildRoute(
+                      gameId: gameId.gameId,
+                      orientation: game.youAre ?? Side.black,
+                    ),
+                  ),
                 ),
                 barrierDismissible: true,
               );
@@ -791,11 +792,13 @@ class const _GameBottomBar({
                 icon: Icons.biotech,
                 badgeLabel: (numPremoveLines ?? 0) > 0 ? numPremoveLines.toString() : null,
                 onTap: () {
-                  final analysisOptions = ref
-                      .read(gameControllerProvider(id))
-                      .requireValue
-                      .analysisOptions;
-                  Navigator.of(context).push(AnalysisScreen.buildRoute(analysisOptions));
+                  final game = ref.read(gameControllerProvider(id)).requireValue.game;
+                  Navigator.of(context).push(
+                    GameReviewScreen.buildRoute(
+                      gameId: id.gameId,
+                      orientation: game.youAre ?? Side.black,
+                    ),
+                  );
                 },
               )
             else if (data.finished)
@@ -807,10 +810,15 @@ class const _GameBottomBar({
                     builder: (_) => GameResultDialog(
                       id: id,
                       onNewOpponentCallback: onNewOpponentCallback,
-                      onBackToTournamentCallback: (tournamentId) =>
-                          _backToTournament(context, tournamentId),
-                      onAnalysisCallback: (options) =>
-                          Navigator.of(context).push(AnalysisScreen.buildRoute(options)),
+                      onReviewCallback: () {
+                        final game = ref.read(gameControllerProvider(id)).requireValue.game;
+                        Navigator.of(context).push(
+                          GameReviewScreen.buildRoute(
+                            gameId: id.gameId,
+                            orientation: game.youAre ?? Side.black,
+                          ),
+                        );
+                      },
                     ),
                     barrierDismissible: true,
                   );
@@ -1019,19 +1027,17 @@ class const _GameBottomBar({
             makeLabel: (context) => Text(context.l10n.newOpponent),
             onPressed: () => onNewOpponentCallback(gameState.game),
           ),
-        if (gameState.tournament != null)
-          BottomSheetAction(
-            makeLabel: (context) => Text(context.l10n.backToTournament),
-            onPressed: () {
-              Navigator.of(context).push(TournamentScreen.buildRoute(gameState.tournament!.id));
-            },
-          ),
         if (gameState.game.playable && gameState.game.meta.speed == Speed.correspondence ||
             gameState.game.finished)
           BottomSheetAction(
             makeLabel: (context) => Text(context.l10n.analysis),
             onPressed: () {
-              Navigator.of(context).push(AnalysisScreen.buildRoute(gameState.analysisOptions));
+              Navigator.of(context).push(
+                GameReviewScreen.buildRoute(
+                  gameId: gameState.game.id,
+                  orientation: gameState.game.youAre ?? Side.black,
+                ),
+              );
             },
           ),
       ],
@@ -1167,26 +1173,5 @@ class const _ThreefoldDialog({required final GameFullId id}) extends ConsumerWid
         PlatformDialogAction(onPressed: decline, child: Text(context.l10n.cancel)),
       ],
     );
-  }
-}
-
-/// Navigates back to the tournament of the game shown with [context].
-///
-/// If we came from the tournament screen (the usual case: we were on the tournament, the game was
-/// pushed on top and we played it), it is still in the navigation stack, so we pop back to it.
-/// Otherwise (e.g. the game was opened from the home recent games list) there is no tournament
-/// screen to go back to, so we push a fresh one.
-void _backToTournament(BuildContext context, TournamentId tournamentId) {
-  final navigator = Navigator.of(context);
-  if (routeStackObserverOf(navigator)
-          ?.containsRoute(TournamentScreen.routeName, arguments: tournamentId.value) ??
-      false) {
-    navigator.popUntil(
-      (route) =>
-          route.settings.name == TournamentScreen.routeName &&
-          route.settings.arguments == tournamentId.value,
-    );
-  } else {
-    navigator.pushHidingTabBar(TournamentScreen.buildRoute(tournamentId));
   }
 }

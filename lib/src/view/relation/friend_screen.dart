@@ -6,12 +6,10 @@ import 'package:lichess_mobile/src/model/relation/relation_preferences.dart';
 import 'package:lichess_mobile/src/model/relation/relation_repository.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
-import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/view/user/user_context_menu.dart';
 import 'package:lichess_mobile/src/view/user/user_or_profile_screen.dart';
-import 'package:lichess_mobile/src/view/watch/tv_screen.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
@@ -174,15 +172,6 @@ class const _OnlineFriendListTile({required final OnlineFriend onlineFriend})
 
     return ListTile(
       title: UserFullNameWidget(user: user),
-      trailing: playing
-          ? IconButton(
-              tooltip: context.l10n.watchGames,
-              onPressed: () {
-                Navigator.of(context).pushHidingTabBar(TvScreen.buildRoute(user: user));
-              },
-              icon: const Icon(Icons.live_tv),
-            )
-          : null,
       onTap: () => Navigator.of(context).push(UserOrProfileScreen.buildRoute(user)),
       onLongPress: () => showAdaptiveBottomSheet<void>(
         context: context,

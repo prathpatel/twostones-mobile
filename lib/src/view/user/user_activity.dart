@@ -8,7 +8,6 @@ import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/account/rating_pref_aware.dart';
-import 'package:lichess_mobile/src/view/puzzle/puzzle_history_screen.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/rating.dart';
 import 'package:lichess_mobile/src/widgets/shimmer.dart';
@@ -156,7 +155,6 @@ class const UserActivityEntry({
               draw: 0,
               loss: entry.puzzles!.loss,
             ),
-            onTap: () => Navigator.of(context).push(PuzzleHistoryScreen.buildRoute()),
           ),
         if (entry.streak != null)
           _UserActivityListTile(
@@ -242,7 +240,6 @@ class const _UserActivityListTile({
   required final String title,
   final Widget? subtitle,
   final Widget? trailing,
-  final VoidCallback? onTap,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -263,7 +260,6 @@ class const _UserActivityListTile({
         title: Text(title, maxLines: 2),
         subtitle: subtitle,
         trailing: trailing,
-        onTap: onTap,
       ),
     );
   }

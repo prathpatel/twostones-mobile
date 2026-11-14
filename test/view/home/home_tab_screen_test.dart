@@ -12,7 +12,6 @@ import 'package:lichess_mobile/src/view/game/game_list_tile.dart';
 import 'package:lichess_mobile/src/view/home/games_carousel.dart';
 import 'package:lichess_mobile/src/view/home/home_tab_screen.dart';
 import 'package:lichess_mobile/src/view/play/quick_game_matrix.dart';
-import 'package:lichess_mobile/src/view/tournament/tournament_list_screen.dart';
 import 'package:lichess_mobile/src/widgets/buttons.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
 import 'package:lichess_mobile/src/widgets/server_outage_display.dart';
@@ -264,44 +263,11 @@ void main() {
         await tester.pumpAndSettle(); // wait for settings screen to open
 
         expect(find.widgetWithText(PlatformAppBar, 'Home widgets'), findsOneWidget);
-        expect(find.byType(FeaturedTournamentsWidget), findsNothing);
 
         await tester.tap(find.widgetWithText(TextButton, 'OK'));
         await tester.pumpAndSettle();
 
         expect(find.widgetWithText(PlatformAppBar, 'Home widgets'), findsNothing);
-      });
-
-      testWidgets('featured tournaments checkbox is shown when there are some to show', (
-        tester,
-      ) async {
-        final mockClient = MockClient((request) {
-          if (request.url.path == '/tournament/featured') {
-            return mockResponse(mockFeaturedTournamentsResponse, 200);
-          }
-          return mockResponse('', 200);
-        });
-        final app = await makeTestProviderScope(
-          tester,
-          child: const Application(),
-          overrides: {
-            httpClientFactoryProvider: httpClientFactoryProvider.overrideWith(
-              (ref) => FakeHttpClientFactory(() => mockClient),
-            ),
-          },
-        );
-        await tester.pumpWidget(app);
-
-        // wait for connectivity
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.text('Customize'));
-        await tester.pumpAndSettle(); // wait for settings screen to open
-
-        expect(find.widgetWithText(PlatformAppBar, 'Home widgets'), findsOneWidget);
-        expect(find.byType(FeaturedTournamentsWidget), findsOneWidget);
-        expect(find.text('Open tournaments'), findsOneWidget);
       });
     });
   });
@@ -505,6 +471,8 @@ void main() {
       final app = await makeTestProviderScope(
         tester,
         child: const Application(),
+        // Signed out, the home screen makes no request, so nothing would reveal the outage.
+        authUser: fakeAuthUser,
         overrides: {
           httpClientFactoryProvider: httpClientFactoryProvider.overrideWith((ref) {
             return FakeHttpClientFactory(() => serverDownClient(statusCode: 502));
@@ -525,6 +493,8 @@ void main() {
       final app = await makeTestProviderScope(
         tester,
         child: const Application(),
+        // Signed out, the home screen makes no request, so nothing would reveal the outage.
+        authUser: fakeAuthUser,
         overrides: {
           httpClientFactoryProvider: httpClientFactoryProvider.overrideWith((ref) {
             return FakeHttpClientFactory(() => serverDownClient(statusCode: 503));

@@ -8,13 +8,9 @@ import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle_angle.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle_theme.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
-import 'package:lichess_mobile/src/view/offline_computer/offline_computer_game_screen.dart';
-import 'package:lichess_mobile/src/view/puzzle/puzzle_screen.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:quick_actions/quick_actions.dart';
 
@@ -47,13 +43,6 @@ class QuickActionService(final Ref ref) {
             rootNavigator: true,
           ).push(GameScreen.buildRoute(source: LobbySource(recentSeeks[index])));
         }
-      } else if (shortcutType == 'play_puzzles') {
-        Navigator.of(
-          context,
-          rootNavigator: true,
-        ).push(PuzzleScreen.buildRoute(angle: const PuzzleTheme(PuzzleThemeKey.mix)));
-      } else if (shortcutType == 'play_computer') {
-        Navigator.of(context, rootNavigator: true).push(OfflineComputerGameScreen.buildRoute());
       }
     });
     setQuickActions(recentSeeks);
@@ -61,17 +50,6 @@ class QuickActionService(final Ref ref) {
 
   void setQuickActions(IList<GameSeek> recentSeeks) {
     quickActions.setShortcutItems(<ShortcutItem>[
-      ShortcutItem(
-        type: 'play_puzzles',
-        localizedTitle: l10n.puzzleDesc,
-        icon: Platform.isIOS ? 'ExtensionIcon' : 'extension',
-      ),
-      ShortcutItem(
-        type: 'play_computer',
-        localizedTitle: l10n.playAgainstComputer,
-        icon: Platform.isIOS ? 'ComputerIcon' : 'computer',
-      ),
-
       ...recentSeeks.asMap().entries.map((entry) {
         final index = entry.key;
         final seek = entry.value;

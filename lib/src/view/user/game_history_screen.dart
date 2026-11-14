@@ -1,7 +1,6 @@
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
@@ -20,9 +19,9 @@ import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/utils/string.dart';
 import 'package:lichess_mobile/src/view/account/game_bookmarks_screen.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_list_detail_tile.dart';
 import 'package:lichess_mobile/src/view/game/game_list_tile.dart';
+import 'package:lichess_mobile/src/view/game/game_review_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
@@ -329,9 +328,7 @@ class _BodyState() extends ConsumerState<_Body> {
                       onPressed: game.variant.isReadSupported
                           ? () {
                               Navigator.of(context).pushHidingTabBar(
-                                AnalysisScreen.buildRoute(
-                                  AnalysisOptions.archivedGame(orientation: pov, gameId: game.id),
-                                ),
+                                GameReviewScreen.buildRoute(orientation: pov, gameId: game.id),
                               );
                             }
                           : () {

@@ -17,7 +17,6 @@ import 'package:lichess_mobile/src/model/common/time_increment.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
 import 'package:lichess_mobile/src/model/game/material_diff.dart';
 import 'package:lichess_mobile/src/model/game/player.dart';
-import 'package:lichess_mobile/src/model/offline_computer/computer_analysis.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 
 part 'game.freezed.dart';
@@ -458,9 +457,6 @@ sealed class GameStep with _$GameStep {
     /// engine); server games carry their clocks in [archivedWhiteClock] and [archivedBlackClock]
     /// instead.
     Duration? clock,
-
-    /// The computer analysis data for this step (only used in offline computer mode).
-    ComputerAnalysis? computerAnalysis,
   }) = _GameStep;
 }
 
@@ -474,7 +470,6 @@ String stepsToJson(IList<GameStep> steps) {
           'uci': e.sanMove?.move.uci,
           'san': e.sanMove?.san,
           if (e.clock != null) 'clk': e.clock!.inMilliseconds,
-          ...?e.computerAnalysis?.toStepJson(),
         },
       )
       .toList(growable: false);
@@ -505,7 +500,6 @@ IList<GameStep> stepsFromJson(String json) {
         sanMove: SanMove(san, move),
         diff: MaterialDiff.fromPosition(position),
         clock: clock != null ? Duration(milliseconds: clock) : null,
-        computerAnalysis: ComputerAnalysis.fromStepJson(step),
       ),
     );
   }

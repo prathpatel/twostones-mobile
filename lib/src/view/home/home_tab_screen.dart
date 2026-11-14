@@ -11,8 +11,6 @@ import 'package:lichess_mobile/src/model/account/home_widgets.dart';
 import 'package:lichess_mobile/src/model/account/ongoing_game.dart';
 import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
-import 'package:lichess_mobile/src/model/blog/blog.dart';
-import 'package:lichess_mobile/src/model/blog/blog_repository.dart';
 import 'package:lichess_mobile/src/model/challenge/challenges.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/correspondence/correspondence_game_storage.dart';
@@ -20,15 +18,12 @@ import 'package:lichess_mobile/src/model/correspondence/offline_correspondence_g
 import 'package:lichess_mobile/src/model/game/game_history.dart';
 import 'package:lichess_mobile/src/model/message/message_repository.dart';
 import 'package:lichess_mobile/src/model/relation/following_user.dart';
-import 'package:lichess_mobile/src/model/tournament/tournament.dart';
-import 'package:lichess_mobile/src/model/tournament/tournament_providers.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/focus_detector.dart';
-import 'package:lichess_mobile/src/utils/image.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/utils/screen.dart';
@@ -40,7 +35,6 @@ import 'package:lichess_mobile/src/view/correspondence/offline_correspondence_ga
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/view/game/offline_correspondence_games_screen.dart';
-import 'package:lichess_mobile/src/view/home/blog_carousel.dart';
 import 'package:lichess_mobile/src/view/home/following_carousel.dart';
 import 'package:lichess_mobile/src/view/home/games_carousel.dart';
 import 'package:lichess_mobile/src/view/message/conversation_screen.dart';
@@ -48,7 +42,6 @@ import 'package:lichess_mobile/src/view/play/ongoing_games_screen.dart';
 import 'package:lichess_mobile/src/view/play/play_bottom_sheet.dart';
 import 'package:lichess_mobile/src/view/play/play_menu.dart';
 import 'package:lichess_mobile/src/view/play/quick_game_matrix.dart';
-import 'package:lichess_mobile/src/view/tournament/tournament_list_screen.dart';
 import 'package:lichess_mobile/src/view/user/challenge_requests_screen.dart';
 import 'package:lichess_mobile/src/view/user/recent_games.dart';
 import 'package:lichess_mobile/src/widgets/buttons.dart';
@@ -58,7 +51,6 @@ import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/misc.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
 import 'package:lichess_mobile/src/widgets/server_outage_display.dart';
-import 'package:lichess_mobile/src/widgets/shimmer.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -100,28 +92,12 @@ class const _IsEditingHome({required super.child, required final bool isEditingW
 const String kHideHomeWidgetCustomizationTip = 'app_hide_home_widget_customization_tip';
 
 class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
-  ImageColorWorker? _worker;
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   DateTime? _focusLostAt;
 
   bool wasOnline = true;
   bool hasRefreshed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadImageWorker();
-  }
-
-  Future<void> _loadImageWorker() async {
-    final worker = await ref.read(imageWorkerFactoryProvider).spawn();
-    if (mounted) {
-      setState(() {
-        _worker = worker;
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,28 +142,16 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
             final hasServerContent = isOnline && !isServerUnavailable;
             final showOutage = isServerUnavailable && !widget.editModeEnabled;
 
-            final featuredTournaments = hasServerContent
-                ? ref.watch(featuredTournamentsProvider)
-                : const AsyncValue.data(IListConst<LightTournament>([]));
-            final blogPosts = hasServerContent
-                ? ref.watch(blogCarouselProvider)
-                : const AsyncValue.data(IListConst<BlogPost>([]));
             final followingAsync = authUser != null && hasServerContent
                 ? ref.watch(followingCarouselProvider)
                 : const AsyncValue.data(IListConst<FollowingUser>([]));
 
             // Widgets whose content can be empty should not show a checkbox in
             // edit mode when there is nothing to display next to it.
-            final hasFeaturedTournaments = featuredTournaments.maybeWhen(
-              data: (tournaments) => tournaments.any((t) => t.isSupportedInApp),
-              orElse: () => true,
-            );
             final hasFollowing = followingAsync.maybeWhen(
               data: (following) => following.isNotEmpty,
               orElse: () => true,
             );
-
-            final isKidMode = ref.watch(kidModeProvider).value ?? false;
 
             // Show the welcome screen if not logged in and there are no recent games and no stored games
             // (i.e. first installation, or the user has never played a game)
@@ -249,7 +213,6 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                           ],
                         ),
                       ),
-                      Expanded(child: FeaturedTournamentsWidget(featured: featuredTournaments)),
                     ],
                   )
                 else ...[
@@ -259,17 +222,6 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                       widget: HomeEditableWidget.quickPairing,
                       shouldShow: true,
                       child: Padding(padding: Styles.bodySectionPadding, child: QuickGameMatrix()),
-                    ),
-                  _EditableWidget(
-                    widget: HomeEditableWidget.featuredTournaments,
-                    shouldShow: hasServerContent && hasFeaturedTournaments,
-                    child: FeaturedTournamentsWidget(featured: featuredTournaments),
-                  ),
-                  if (_worker != null && !isKidMode)
-                    _EditableWidget(
-                      widget: HomeEditableWidget.blogCarousel,
-                      shouldShow: hasServerContent,
-                      child: _BlogCarouselWidget(blogPosts, _worker!),
                     ),
                 ],
               ];
@@ -309,13 +261,6 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                         mainAxisAlignment: MainAxisAlignment.start,
                         children: [
                           const SizedBox(height: 8.0),
-                          FeaturedTournamentsWidget(featured: featuredTournaments),
-                          if (_worker != null && !isKidMode)
-                            _EditableWidget(
-                              widget: HomeEditableWidget.blogCarousel,
-                              shouldShow: hasServerContent,
-                              child: _BlogCarouselWidget(blogPosts, _worker!),
-                            ),
                           RecentGamesWidget(
                             recentGames: recentGames,
                             nbOfGames: nbOfGames,
@@ -367,17 +312,6 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                       ? _OngoingGamesCarousel(ongoingGames, maxGamesToShow: 20)
                       : _OfflineCorrespondenceCarousel(offlineCorresGames, maxGamesToShow: 20),
                 ),
-                _EditableWidget(
-                  widget: HomeEditableWidget.featuredTournaments,
-                  shouldShow: hasServerContent && hasFeaturedTournaments,
-                  child: FeaturedTournamentsWidget(featured: featuredTournaments),
-                ),
-                if (_worker != null && !isKidMode)
-                  _EditableWidget(
-                    widget: HomeEditableWidget.blogCarousel,
-                    shouldShow: hasServerContent,
-                    child: _BlogCarouselWidget(blogPosts, _worker!),
-                  ),
                 _EditableWidget(
                   widget: HomeEditableWidget.recentGames,
                   shouldShow: true,
@@ -457,7 +391,6 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
         if (isOnline) ref.refresh(unreadMessagesProvider.future),
         if (isOnline) ref.refresh(accountProvider.future),
         if (isOnline) ref.refresh(ongoingGamesProvider.future),
-        if (isOnline) ref.refresh(featuredTournamentsProvider.future),
         if (isOnline) ref.refresh(followingCarouselProvider.future),
       ]);
     } catch (_) {
@@ -678,37 +611,6 @@ class const _TabletCreateAGameSection() extends StatelessWidget {
         ),
         PlayMenu(),
       ],
-    );
-  }
-}
-
-class const _BlogCarouselWidget(
-  final AsyncValue<IList<BlogPost>> posts,
-  final ImageColorWorker worker,
-) extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: Styles.verticalBodyPadding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: Styles.horizontalBodyPadding,
-            child: ListSectionHeader(title: Text(context.l10n.blog)),
-          ),
-          switch (posts) {
-            AsyncData(:final value) => BlogCarousel(posts: value, worker: worker),
-            AsyncError() => const Padding(
-              padding: Styles.bodySectionPadding,
-              child: Text('Could not load blog posts.'),
-            ),
-            _ => Shimmer(
-              child: ShimmerLoading(isLoading: true, child: BlogCarousel.loading(worker: worker)),
-            ),
-          },
-        ],
-      ),
     );
   }
 }

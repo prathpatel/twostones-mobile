@@ -2,54 +2,28 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:collection/collection.dart';
-import 'package:dartchess/dartchess.dart';
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
 import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
-import 'package:lichess_mobile/src/model/game/game_repository.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle_angle.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle_providers.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle_repository.dart';
-import 'package:lichess_mobile/src/model/puzzle/puzzle_theme.dart';
-import 'package:lichess_mobile/src/model/tv/tv_channel.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/model/user/user_repository.dart';
 import 'package:lichess_mobile/src/service/challenge_service.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
-import 'package:lichess_mobile/src/view/board_editor/board_editor_screen.dart';
-import 'package:lichess_mobile/src/view/broadcast/broadcast_game_screen.dart';
-import 'package:lichess_mobile/src/view/broadcast/broadcast_player_results_screen.dart';
-import 'package:lichess_mobile/src/view/broadcast/broadcast_round_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
-import 'package:lichess_mobile/src/view/practice/practice_screen.dart';
-import 'package:lichess_mobile/src/view/puzzle/puzzle_screen.dart';
-import 'package:lichess_mobile/src/view/study/study_screen.dart';
-import 'package:lichess_mobile/src/view/tournament/tournament_screen.dart';
 import 'package:lichess_mobile/src/view/user/user_or_profile_screen.dart';
-import 'package:lichess_mobile/src/view/watch/tv_screen.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/rich_link_text.dart';
 import 'package:logging/logging.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final _logger = Logger('AppLinks');
-
-// Deeplink host/path for the iOS daily-puzzle widget tap.
-// Must stay in sync with Deeplinks.swift in the iOS widget extension.
-const _kDailyPuzzleDeeplinkHost = 'training';
-const _kDailyPuzzleDeeplinkPath = 'daily';
 
 final appLinksServiceProvider = Provider<AppLinksService>((ref) {
   final service = AppLinksService(ref);
@@ -110,18 +84,6 @@ class AppLinksService(final Ref ref, {AppLinks? appLinks}) {
       return;
     }
     final context = ref.read(currentNavigatorKeyProvider).currentContext;
-    if (uri.scheme == kLichessCustomUriSchemeName &&
-        uri.host == _kDailyPuzzleDeeplinkHost &&
-        uri.pathSegments.firstOrNull == _kDailyPuzzleDeeplinkPath) {
-      if (context != null && context.mounted) {
-        await handleDailyPuzzleLink(
-          context,
-          uri.pathSegments.elementAtOrNull(1),
-          animated: animated,
-        );
-      }
-      return;
-    }
     if (context != null && context.mounted) {
       // For app deep links, we don't want to allow falling back to the browser as it might trigger an infinite loop if the app isn't properly handling the link
       await handleAppLink(context, uri, animated: animated, allowBrowserFallback: false);
@@ -137,98 +99,8 @@ class AppLinksService(final Ref ref, {AppLinks? appLinks}) {
     if (appLinkUri.pathSegments.isEmpty) return null;
     _logger.info('Resolving app link: $appLinkUri');
     switch (appLinkUri.pathSegments[0]) {
-      case 'study':
-        final id = appLinkUri.pathSegments[1];
-        final chapter = appLinkUri.pathSegments.getOrNull(2);
-        return [
-          StudyScreen.buildRoute((
-            id: StudyId(id),
-            initialChapter: chapter != null ? StudyChapterId(chapter) : null,
-          )),
-        ];
-      case 'broadcast':
-        final roundId = BroadcastRoundId(appLinkUri.pathSegments[3]);
-        if (appLinkUri.pathSegments.length > 4) {
-          final gameId = BroadcastGameId(appLinkUri.pathSegments[4]);
-          return [
-            BroadcastRoundScreenLoading.buildRoute(roundId, initialTab: BroadcastRoundTab.boards),
-            BroadcastGameScreen.buildRoute(roundId: roundId, gameId: gameId),
-          ];
-        } else {
-          final fragment = appLinkUri.fragment;
-          final tab = BroadcastRoundTab.tabOrNullFromString(fragment.split('/').first);
-          if (tab == BroadcastRoundTab.players && fragment.length > 'players/'.length) {
-            final playerId = Uri.decodeComponent(fragment.substring('players/'.length));
-            return [
-              BroadcastRoundScreenLoading.buildRoute(
-                roundId,
-                initialTab: BroadcastRoundTab.players,
-              ),
-              BroadcastPlayerResultsScreenLoading.buildRoute(roundId, playerId),
-            ];
-          }
-          return [BroadcastRoundScreenLoading.buildRoute(roundId, initialTab: tab)];
-        }
-      case 'tournament':
-        final tournamentId = TournamentId(appLinkUri.pathSegments[1]);
-        final playerName = appLinkUri.queryParameters['player'];
-        final playerId = playerName != null ? UserId.fromUserName(playerName) : null;
-        return [TournamentScreen.buildRoute(tournamentId, initialPlayerId: playerId)];
-      case 'training':
-        final id = appLinkUri.pathSegments.getOrNull(1);
-        return [
-          PuzzleScreen.buildRoute(
-            angle: const PuzzleTheme(PuzzleThemeKey.mix),
-            puzzleId: id != null ? PuzzleId(id) : null,
-            openCasual: id != null,
-          ),
-        ];
-      case 'practice' when appLinkUri.pathSegments.length == 1:
-        return [PracticeScreen.buildRoute()];
-      case 'analysis' when appLinkUri.pathSegments.length == 1:
-        return [
-          AnalysisScreen.buildRoute(const AnalysisOptions.standalone(variant: Variant.standard)),
-        ];
-      case 'editor':
-        final orientation = appLinkUri.queryParameters['color'] == 'black'
-            ? Side.black
-            : Side.white;
-        final fen = appLinkUri.pathSegments.sublist(1).join('/').replaceAll('_', ' ').trim();
-        String? initialFen;
-        if (fen.isNotEmpty) {
-          try {
-            Setup.parseFen(fen);
-            initialFen = fen;
-          } catch (_) {
-            if (context.mounted) {
-              showSnackBar(context, 'Invalid FEN: $fen', type: SnackBarType.error);
-            }
-          }
-        }
-        return [
-          BoardEditorScreen.buildRoute((
-            initialVariant: Variant.standard,
-            initialFen: initialFen,
-            initialOrientation: orientation,
-          )),
-        ];
-      case 'tv':
-        if (appLinkUri.pathSegments.length < 2) return null;
-        final channel = TvChannel.nameMap.entryOrNull(appLinkUri.pathSegments[1]);
-        if (channel != null) {
-          return [TvScreen.buildRoute(channel: channel.value)];
-        } else {
-          if (!context.mounted) return null;
-          showSnackBar(
-            context,
-            'Invalid TV channel: ${appLinkUri.pathSegments[1]}',
-            type: SnackBarType.error,
-          );
-          return [];
-        }
       case '@':
-        final isTv = appLinkUri.pathSegments.getOrNull(2) == 'tv';
-        if (appLinkUri.pathSegments.length > 2 && !isTv) {
+        if (appLinkUri.pathSegments.length > 2) {
           return null;
         }
         try {
@@ -237,9 +109,7 @@ class AppLinksService(final Ref ref, {AppLinks? appLinks}) {
               .getUser(UserId.fromUserName(appLinkUri.pathSegments[1]));
           if (!context.mounted) return null;
 
-          return isTv
-              ? [TvScreen.buildRoute(user: user.lightUser)]
-              : [UserOrProfileScreen.buildRoute(user.lightUser)];
+          return [UserOrProfileScreen.buildRoute(user.lightUser)];
         } catch (e) {
           if (!context.mounted) return null;
           showSnackBar(
@@ -276,52 +146,6 @@ class AppLinksService(final Ref ref, {AppLinks? appLinks}) {
       if (targetUri != null) {
         launchUrl(targetUri, mode: LaunchMode.inAppBrowserView);
       }
-    }
-  }
-
-  /// Opens the native daily-puzzle screen (same path as tapping the daily-puzzle
-  /// card on the puzzle tab) in response to `org.lichess.mobile://training/daily`
-  /// or `org.lichess.mobile://training/daily/{id}` deeplinks emitted by the iOS
-  /// home-screen widget.
-  ///
-  /// Always fetches the current daily puzzle first (cached, so no extra request
-  /// in the common case). When [puzzleId] matches today's daily, it is used
-  /// directly. When it differs (widget cached a stale id), that specific puzzle
-  /// is fetched but NOT flagged as the daily so the user isn't confused when
-  /// navigating back to the puzzle tab.
-  @visibleForTesting
-  Future<void> handleDailyPuzzleLink(
-    BuildContext context,
-    String? puzzleId, {
-    bool animated = true,
-  }) async {
-    try {
-      Puzzle puzzle;
-      final dailyPuzzle = await ref.read(dailyPuzzleProvider.future);
-      if (puzzleId == null || dailyPuzzle.puzzle.id == PuzzleId(puzzleId)) {
-        puzzle = dailyPuzzle;
-      } else {
-        // Widget cached a different puzzle than today's daily — fetch it, but don't mark as daily
-        // to avoid confusing the user.
-        try {
-          puzzle = await ref.read(puzzleRepositoryProvider).fetch(PuzzleId(puzzleId));
-        } catch (e, st) {
-          _logger.info('Failed to load widget puzzle id $puzzleId, falling back:', e, st);
-          puzzle = dailyPuzzle;
-        }
-      }
-      if (!context.mounted) return;
-      final route = PuzzleScreen.buildRoute(
-        angle: const PuzzleTheme(PuzzleThemeKey.mix),
-        puzzle: puzzle,
-      );
-      await _pushDeepLinkRoute(
-        Navigator.of(context, rootNavigator: true),
-        route,
-        animated: animated,
-      );
-    } catch (e, st) {
-      _logger.severe('Failed to open daily puzzle from widget:', e, st);
     }
   }
 
@@ -378,30 +202,8 @@ class AppLinksService(final Ref ref, {AppLinks? appLinks}) {
         }
       }
 
-      if (!context.mounted) return null;
-
-      final game = await ref.read(gameRepositoryProvider).getGame(gameId);
-      final orientation = appLinkUri.pathSegments.getOrNull(2) == 'black' ? Side.black : Side.white;
-      final int ply = int.tryParse(appLinkUri.fragment) ?? 0;
-
-      if (!context.mounted) return null;
-
-      if (game.finished || game.source == .import) {
-        return [
-          AnalysisScreen.buildRoute(
-            AnalysisOptions.archivedGame(
-              orientation: orientation,
-              gameId: gameId,
-              initialMoveCursor: ply,
-            ),
-          ),
-        ];
-      }
-
-      final user = game.playerOf(orientation).user;
-      if (user != null) {
-        return [TvScreen.buildRoute(gameId: gameId, user: user, orientation: orientation)];
-      }
+      // TODO(go): open finished games in the game review screen, and other people's games in
+      // the spectator screen, once they exist. Until then such links open in the browser.
     } catch (e, st) {
       _logger.info('Not a game link:', e, st);
     }

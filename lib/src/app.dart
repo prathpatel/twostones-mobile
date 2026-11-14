@@ -22,14 +22,11 @@ import 'package:lichess_mobile/src/service/account_service.dart';
 import 'package:lichess_mobile/src/service/announce_service.dart';
 import 'package:lichess_mobile/src/service/app_links_service.dart';
 import 'package:lichess_mobile/src/service/app_log_service.dart';
-import 'package:lichess_mobile/src/service/broadcast_service.dart';
 import 'package:lichess_mobile/src/service/challenge_service.dart';
 import 'package:lichess_mobile/src/service/correspondence_service.dart';
 import 'package:lichess_mobile/src/service/message_service.dart';
 import 'package:lichess_mobile/src/service/notification_service.dart';
 import 'package:lichess_mobile/src/service/quick_actions.dart';
-import 'package:lichess_mobile/src/service/recap_service.dart';
-import 'package:lichess_mobile/src/service/shared_pgn_service.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/tab_scaffold.dart';
 import 'package:lichess_mobile/src/theme.dart';
@@ -97,9 +94,6 @@ class _AppState() extends ConsumerState<Application> {
     ref.read(quickActionServiceProvider).start();
     ref.read(announceServiceProvider).start();
     ref.read(appLinksServiceProvider).start();
-    ref.read(sharedPgnServiceProvider).start();
-    ref.read(broadcastServiceProvider).start();
-    ref.read(recapServiceProvider).start();
 
     if (Platform.isIOS) {
       HomeWidget.setAppGroupId(_kIosAppGroupId);

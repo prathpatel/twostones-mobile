@@ -4,14 +4,11 @@ import 'dart:math';
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/constants.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_controller.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
-import 'package:lichess_mobile/src/model/game/over_the_board_game.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
-import 'package:lichess_mobile/src/model/tournament/tournament_controller.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/game/status_l10n.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
@@ -24,14 +21,11 @@ class const GameResultDialog({
   /// Callback to load a new opponent.
   required final void Function(PlayableGame game) onNewOpponentCallback,
 
-  /// Callback to navigate back to the tournament of the game, once the dialog is closed.
-  required final void Function(TournamentId tournamentId) onBackToTournamentCallback,
-
-  /// Callback to open the analysis of the game, once the dialog is closed.
+  /// Callback to open the review of the game, once the dialog is closed.
   ///
   /// It pushes with the game screen's context: the dialog is on the root navigator, the game screen
   /// may be in a tab navigator.
-  required final void Function(AnalysisOptions options) onAnalysisCallback,
+  required final VoidCallback onReviewCallback,
   super.key,
 }) extends ConsumerStatefulWidget {
   @override
@@ -86,11 +80,6 @@ class _GameResultDialogState() extends ConsumerState<GameResultDialog> {
       };
     }
     return null;
-  }
-
-  void _backToTournament(TournamentId tournamentId) {
-    Navigator.of(context).popUntil((route) => route is! PopupRoute);
-    widget.onBackToTournamentCallback(tournamentId);
   }
 
   @override
@@ -214,29 +203,11 @@ class _GameResultDialogState() extends ConsumerState<GameResultDialog> {
                     : null,
                 child: Text(context.l10n.newOpponent, textAlign: TextAlign.center),
               ),
-            if (value.tournament?.isOngoing == true) ...[
-              FilledButton.icon(
-                icon: const Icon(Icons.play_arrow),
-                onPressed: () => _backToTournament(value.tournament!.id),
-                label: Text(context.l10n.backToTournament, textAlign: TextAlign.center),
-              ),
-              FilledButton.tonalIcon(
-                icon: const Icon(Icons.pause),
-                onPressed: () {
-                  // Pause the tournament
-                  ref
-                      .read(tournamentControllerProvider(value.tournament!.id).notifier)
-                      .joinOrPause();
-                  _backToTournament(value.tournament!.id);
-                },
-                label: Text(context.l10n.pause, textAlign: TextAlign.center),
-              ),
-            ],
             if (value.game.userAnalysable)
               FilledButton.tonal(
                 onPressed: () {
                   Navigator.of(context).popUntil((route) => route is! PopupRoute);
-                  widget.onAnalysisCallback(value.analysisOptions);
+                  widget.onReviewCallback();
                 },
                 child: Text(context.l10n.analysis, textAlign: TextAlign.center),
               ),
@@ -245,50 +216,6 @@ class _GameResultDialogState() extends ConsumerState<GameResultDialog> {
       ),
       _ => const Center(child: CircularProgressIndicator.adaptive()),
     };
-  }
-}
-
-class const OverTheBoardGameResultDialog({
-  super.key,
-  required final OverTheBoardGame game,
-  required final void Function() onRematch,
-
-  /// Callback to open the analysis of the game, once the dialog is closed.
-  ///
-  /// It pushes with the game screen's context: the dialog is on the root navigator, the game screen
-  /// may be in a tab navigator.
-  required final void Function(AnalysisOptions options) onAnalysis,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final content = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        GameResult(game: game),
-        FilledButton(
-          onPressed: onRematch,
-          child: Text(context.l10n.rematch, textAlign: TextAlign.center),
-        ),
-        FilledButton.tonal(
-          onPressed: () {
-            Navigator.pop(context);
-            onAnalysis(
-              AnalysisOptions.pgn(
-                id: const StringId('otb_finished_game_analysis'),
-                orientation: Side.white,
-                pgn: game.makePgn(),
-                isComputerAnalysisAllowed: true,
-                variant: game.meta.variant,
-              ),
-            );
-          },
-          child: Text(context.l10n.analysis, textAlign: TextAlign.center),
-        ),
-      ],
-    );
-
-    return _ResultDialog(child: content);
   }
 }
 

@@ -16,7 +16,6 @@ import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
-import 'package:lichess_mobile/src/model/common/socket.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_controller.dart';
@@ -41,7 +40,6 @@ import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/widgets/bottom_bar.dart';
 import 'package:lichess_mobile/src/widgets/clock.dart';
 import 'package:lichess_mobile/src/widgets/game_layout.dart';
-import 'package:lichess_mobile/src/widgets/platform.dart';
 import 'package:lichess_mobile/src/widgets/pockets.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:mocktail/mocktail.dart';
@@ -2547,117 +2545,6 @@ void main() {
       // white is now active
       expect(correspondenceClockWithTime(tester, '23:59').active, isTrue);
       expect(correspondenceClockWithTime(tester, 'One day').active, isFalse);
-    }, variant: kPlatformVariant);
-  });
-
-  group('Opening analysis', () {
-    testWidgets('is not possible for an unfinished real time game', (WidgetTester tester) async {
-      await createTestGame(
-        tester,
-        pgn: 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Na5 Bb5+ c6 dxc6 bxc6 Qf3 Rb8 Bd3',
-        socketVersion: 0,
-      );
-      expect(find.byType(Chessboard), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pump(const Duration(milliseconds: 500));
-      // The game menu is a Material dialog on Android and a Cupertino popup on iOS: check for an
-      // action that is always present instead of the containing widget.
-      expect(find.text('Flip board'), findsOneWidget);
-      expect(find.text('Analysis board'), findsNothing);
-    }, variant: kPlatformVariant);
-
-    testWidgets('for an unfinished correspondence game', (WidgetTester tester) async {
-      const gameFullId = GameFullId('qVChCOTcHSeW');
-      final fullEventString = makeFullEvent(
-        gameFullId.gameId,
-        'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Na5 Bb5+ c6 dxc6 bxc6 Qf3 Rb8 Bd3',
-        whiteUserName: 'Peter',
-        blackUserName: 'Steven',
-        socketVersion: 0,
-        clock: null,
-        correspondenceClock: (
-          daysPerTurn: 3,
-          white: const Duration(days: 3),
-          black: const Duration(days: 2, hours: 22, minutes: 49, seconds: 59),
-        ),
-      );
-
-      // AnalysisScreen uses this to get the game data
-      final mockClient = MockClient((request) {
-        if (request.url.path == '/game/$gameFullId/forecasts') {
-          return mockResponse(
-            jsonEncode(
-              SocketEvent.fromJson(jsonDecode(fullEventString) as Map<String, dynamic>).data,
-            ),
-            200,
-          );
-        }
-        return mockResponse('', 404);
-      });
-
-      final app = await makeTestProviderScopeApp(
-        tester,
-        home: const GameScreen(source: ExistingGameSource(gameFullId)),
-        overrides: {
-          lichessClientProvider: lichessClientProvider.overrideWith(
-            (ref) => LichessClient(mockClient, ref),
-          ),
-        },
-      );
-      await tester.pumpWidget(app);
-      await tester.pump(const Duration(milliseconds: 10));
-
-      sendServerSocketMessages(GameController.socketUri(gameFullId), [fullEventString]);
-      await tester.pump();
-
-      expect(find.byType(Chessboard), findsOneWidget);
-      expect(boardHasPiece(tester, Square.d3, Piece.whiteBishop), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.b5), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.d3), isTrue);
-      await tester.tap(find.byIcon(Icons.menu));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Flip board'), findsOneWidget);
-      final analysisBoard = find.text('Analysis board');
-      // The action sheet may be too tall for the screen: scroll it into view first.
-      await tester.ensureVisible(analysisBoard);
-      await tester.pumpAndSettle();
-      await tester.tap(analysisBoard);
-      await tester.pumpAndSettle(); // wait for analysis screen to open
-      expect(
-        find.widgetWithText(PlatformAppBar, 'Analysis board'),
-        findsOneWidget,
-      ); // analysis screen is now open
-      expect(boardHasPiece(tester, Square.f3, Piece.whiteQueen), isTrue);
-      expect(boardHasPiece(tester, Square.d3, Piece.whiteBishop), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.b5), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.d3), isTrue);
-      expect(find.bySemanticsLabel(RegExp('Moves played')), findsOneWidget);
-      // computer analysis is not available when game is not finished
-      expect(find.bySemanticsLabel(RegExp('Computer analysis')), findsNothing);
-    }, variant: kPlatformVariant);
-
-    testWidgets('for a finished game', (WidgetTester tester) async {
-      await loadFinishedTestGame(tester);
-      expect(find.byType(Chessboard), findsOneWidget);
-      expect(boardHasPiece(tester, Square.e6, Piece.whiteQueen), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.d5), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.e6), isTrue);
-      await tester.pump(const Duration(milliseconds: 500)); // wait for popup
-      await tester.tap(find.text('Analysis board'));
-      await tester.pumpAndSettle(); // wait for analysis screen to open
-      expect(
-        find.descendant(of: find.byType(PlatformAppBar), matching: find.text('2+1 • Rated')),
-        findsOneWidget,
-      );
-      expect(find.byType(Chessboard), findsOneWidget);
-      expect(boardHasPiece(tester, Square.e6, Piece.whiteQueen), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.d5), isTrue);
-      expect(getBoardLastMove(tester)?.hasSquare(Square.e6), isTrue);
-      expect(find.bySemanticsLabel(RegExp('Moves played')), findsOneWidget);
-      expect(
-        find.bySemanticsLabel(RegExp('Computer analysis')),
-        findsOneWidget,
-      ); // computer analysis is available
     }, variant: kPlatformVariant);
   });
 

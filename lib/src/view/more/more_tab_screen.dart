@@ -1,30 +1,19 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/message/message_repository.dart';
-import 'package:lichess_mobile/src/model/team/team_providers.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/account/account_menu.dart';
 import 'package:lichess_mobile/src/view/account/profile_screen.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
-import 'package:lichess_mobile/src/view/board_editor/board_editor_screen.dart';
 import 'package:lichess_mobile/src/view/clock/clock_tool_screen.dart';
-import 'package:lichess_mobile/src/view/explorer/opening_explorer_screen.dart';
 import 'package:lichess_mobile/src/view/message/contacts_screen.dart';
-import 'package:lichess_mobile/src/view/more/import_pgn_screen.dart';
 import 'package:lichess_mobile/src/view/relation/friend_screen.dart';
 import 'package:lichess_mobile/src/view/settings/settings_screen.dart';
-import 'package:lichess_mobile/src/view/team/team_updates_screen.dart';
 import 'package:lichess_mobile/src/view/user/player_screen.dart';
-import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/misc.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
@@ -75,66 +64,6 @@ class const _Body() extends ConsumerWidget {
             header: SettingsSectionTitle(context.l10n.tools),
             hasLeading: true,
             children: [
-              ListTile(
-                leading: const Icon(Icons.upload_file_outlined),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                title: Text(context.l10n.importPgn),
-                onTap: () => Navigator.of(context).push(ImportPgnScreen.buildRoute()),
-              ),
-              ListTile(
-                leading: const Icon(Icons.biotech_outlined),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                title: Text(context.l10n.analysis),
-                onTap: () => Navigator.of(context).pushHidingTabBar(
-                  AnalysisScreen.buildRoute(
-                    const AnalysisOptions.standalone(variant: Variant.standard),
-                  ),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.explore_outlined),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                title: Text(context.l10n.openingExplorer),
-                enabled: isOnline,
-                onTap: () {
-                  if (authUser == null) {
-                    showSnackBar(context, context.l10n.youNeedAnAccountToDoThat);
-                    return;
-                  }
-
-                  Navigator.of(context).pushHidingTabBar(
-                    OpeningExplorerScreen.buildRoute(
-                      const AnalysisOptions.pgn(
-                        id: StringId('standalone_opening_explorer'),
-                        orientation: Side.white,
-                        pgn: '',
-                        isComputerAnalysisAllowed: false,
-                        variant: Variant.standard,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                trailing: Theme.of(context).platform == TargetPlatform.iOS
-                    ? const CupertinoListTileChevron()
-                    : null,
-                title: Text(context.l10n.boardEditor),
-                onTap: () => Navigator.of(context).pushHidingTabBar(
-                  BoardEditorScreen.buildRoute((
-                    initialVariant: Variant.standard,
-                    initialFen: null,
-                    initialOrientation: null,
-                  )),
-                ),
-              ),
               ListTile(
                 leading: const Icon(Icons.alarm_outlined),
                 trailing: Theme.of(context).platform == TargetPlatform.iOS
@@ -217,7 +146,6 @@ class const _AccountSection() extends ConsumerWidget {
     final authUser = ref.watch(authControllerProvider);
     final kidMode = account.value?.kid ?? false;
     final unreadMessages = ref.watch(unreadMessagesProvider).value?.unread ?? 0;
-    final unreadTeamUpdates = ref.watch(unreadTeamUpdatesCountProvider).value ?? 0;
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
 
     final user = authUser?.user;
@@ -248,19 +176,6 @@ class const _AccountSection() extends ConsumerWidget {
               enabled: isOnline,
               onTap: () {
                 Navigator.of(context).push(ContactsScreen.buildRoute());
-              },
-            ),
-            ListTile(
-              leading: Badge.count(
-                isLabelVisible: unreadTeamUpdates > 0,
-                count: unreadTeamUpdates,
-                child: const Icon(Icons.groups_outlined),
-              ),
-              title: Text(context.l10n.teamTeamUpdates),
-              trailing: isIOS ? const CupertinoListTileChevron() : null,
-              enabled: isOnline,
-              onTap: () {
-                Navigator.of(context).push(TeamUpdatesScreen.buildRoute());
               },
             ),
           ],

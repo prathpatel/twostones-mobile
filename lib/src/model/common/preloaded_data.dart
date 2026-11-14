@@ -8,7 +8,6 @@ import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/db/secure_storage.dart';
 import 'package:lichess_mobile/src/model/auth/auth_storage.dart';
 import 'package:lichess_mobile/src/model/auth/auth_user.dart';
-import 'package:lichess_mobile/src/model/engine/engine_utils.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 import 'package:lichess_mobile/src/utils/string.dart';
 import 'package:lichess_mobile/src/utils/system.dart';
@@ -24,7 +23,6 @@ typedef PreloadedData = ({
   BaseDeviceInfo deviceInfo,
   AuthUser? authUser,
   String sri,
-  int engineMaxMemoryInMb,
   Directory? appDocumentsDirectory,
   Directory? appSupportDirectory,
   Directory? imageCacheDirectory,
@@ -80,7 +78,6 @@ final preloadedDataProvider = FutureProvider<PreloadedData>((Ref ref) async {
     deviceInfo: deviceInfo,
     authUser: authUser,
     sri: sri,
-    engineMaxMemoryInMb: engineMaxMemoryFor(physicalMemory ?? 256),
     appDocumentsDirectory: appDocumentsDirectory,
     appSupportDirectory: appSupportDirectory,
     imageCacheDirectory: imageCacheDirectory,

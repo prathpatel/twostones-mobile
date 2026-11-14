@@ -3,7 +3,6 @@ import 'package:collection/collection.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/correspondence/correspondence_game_storage.dart';
 import 'package:lichess_mobile/src/model/correspondence/offline_correspondence_game.dart';
@@ -18,7 +17,6 @@ import 'package:lichess_mobile/src/styles/icon_extensions.dart';
 import 'package:lichess_mobile/src/utils/chessboard.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
 import 'package:lichess_mobile/src/view/game/correspondence_clock_widget.dart';
 import 'package:lichess_mobile/src/view/game/game_player.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_action_sheet.dart';
@@ -224,26 +222,6 @@ class _BodyState() extends ConsumerState<_Body> {
                       });
                     },
                     icon: CupertinoIcons.arrow_2_squarepath,
-                  ),
-                  BottomBarButton(
-                    label: context.l10n.analysis,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        AnalysisScreen.buildRoute(
-                          AnalysisOptions.pgn(
-                            id: game.id,
-                            orientation: game.youAre!,
-                            pgn: game.makePgn(),
-                            isComputerAnalysisAllowed: false,
-                            variant: game.variant,
-                            initialMoveCursor: stepCursor,
-                            // TODO implement offline storage and syncing of conditional premoves in CorrespondenceService and OfflineCorrespondenceGame
-                            // Until then, we do not enable conditional premoves in offline correspondence games
-                          ),
-                        ),
-                      );
-                    },
-                    icon: Icons.biotech,
                   ),
                   BottomBarButton(
                     label: 'Go to the next game',

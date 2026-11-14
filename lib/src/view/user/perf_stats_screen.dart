@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/constants.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/game/game_filter.dart';
@@ -20,8 +19,7 @@ import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/duration.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
-import 'package:lichess_mobile/src/view/puzzle/dashboard_screen.dart';
+import 'package:lichess_mobile/src/view/game/game_review_screen.dart';
 import 'package:lichess_mobile/src/view/user/game_history_screen.dart';
 import 'package:lichess_mobile/src/view/user/rating_history_chart.dart';
 import 'package:lichess_mobile/src/view/user/user_stat_cards.dart';
@@ -152,11 +150,6 @@ class const _Body({required final User user, required final Perf perf}) extends 
             },
             loading: () => const CenterLoadingIndicator(),
           ),
-          // Show puzzle dashboard if viewing own puzzle perf
-          if (user.id == loggedInUser?.user.id) ...[
-            const SizedBox(height: 16),
-            const PuzzleDashboardWidget(showDaysSelector: true),
-          ],
         ],
       );
     }
@@ -662,12 +655,10 @@ class const _GameListWidget({
               final gameData = list.firstWhereOrNull((g) => g.id == game.gameId);
               if (context.mounted && gameData != null && gameData.variant.isReadSupported) {
                 Navigator.of(context).pushHidingTabBar(
-                  AnalysisScreen.buildRoute(
-                    AnalysisOptions.archivedGame(
-                      orientation: user.id == gameData.white.user?.id ? Side.white : Side.black,
-                      gameId: gameData.id,
-                      initialMoveCursor: 0,
-                    ),
+                  GameReviewScreen.buildRoute(
+                    orientation: user.id == gameData.white.user?.id ? Side.white : Side.black,
+                    gameId: gameData.id,
+                    initialMoveCursor: 0,
                   ),
                 );
               } else if (context.mounted && gameData != null) {

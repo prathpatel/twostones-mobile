@@ -3,10 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/home/home_tab_screen.dart';
-import 'package:lichess_mobile/src/view/learn/learn_tab_screen.dart';
 import 'package:lichess_mobile/src/view/more/more_tab_screen.dart';
-import 'package:lichess_mobile/src/view/puzzle/puzzle_tab_screen.dart';
-import 'package:lichess_mobile/src/view/watch/watch_tab_screen.dart';
 import 'package:lichess_mobile/src/widgets/background.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart'
     show BlurredBarBackground, ios27GlassSettings, useLiquidGlass, usePinnedNavBar;
@@ -174,12 +171,6 @@ class const MainTabScaffold({super.key}) extends ConsumerWidget {
         switch (tappedTab) {
           case BottomTab.home:
             homeTabInteraction.notifyItemTapped();
-          case BottomTab.puzzles:
-            puzzlesTabInteraction.notifyItemTapped();
-          case BottomTab.learn:
-            learnTabInteraction.notifyItemTapped();
-          case BottomTab.watch:
-            watchTabInteraction.notifyItemTapped();
           case BottomTab.more:
             moreTabInteraction.notifyItemTapped();
         }
@@ -198,24 +189,6 @@ class const MainTabScaffold({super.key}) extends ConsumerWidget {
           builder: (context) => const HomeTabScreen(),
         );
       case 1:
-        return _MaterialTabView(
-          navigatorKey: puzzlesNavigatorKey,
-          tab: BottomTab.puzzles,
-          builder: (context) => const PuzzleTabScreen(),
-        );
-      case 2:
-        return _MaterialTabView(
-          navigatorKey: learnNavigatorKey,
-          tab: BottomTab.learn,
-          builder: (context) => const LearnTabScreen(),
-        );
-      case 3:
-        return _MaterialTabView(
-          navigatorKey: watchNavigatorKey,
-          tab: BottomTab.watch,
-          builder: (context) => const WatchTabScreen(),
-        );
-      case 4:
         return _MaterialTabView(
           navigatorKey: moreNavigatorKey,
           tab: BottomTab.more,

@@ -6,11 +6,9 @@ import 'package:lichess_mobile/src/model/user/user_repository_providers.dart';
 import 'package:lichess_mobile/src/service/app_links_service.dart';
 import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
-import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/user/user_or_profile_screen.dart';
 import 'package:lichess_mobile/src/view/user/user_screen.dart';
-import 'package:lichess_mobile/src/view/watch/tv_screen.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
@@ -62,14 +60,6 @@ class const UserContextMenu({final User? user, final UserId? userId, super.key})
                   },
                   icon: Icons.person,
                   child: Text(context.l10n.profile),
-                ),
-                BottomSheetContextMenuAction(
-                  icon: Icons.live_tv_outlined,
-                  onPressed: () {
-                    Navigator.of(context)
-                        .pushHidingTabBar(TvScreen.buildRoute(user: value.lightUser));
-                  },
-                  child: Text(context.l10n.watchGames),
                 ),
                 if (authUser != null && value.canChallenge != null)
                   BottomSheetContextMenuAction(

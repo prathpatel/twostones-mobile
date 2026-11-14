@@ -106,9 +106,7 @@ class _ChatScreenState() extends ConsumerState<ChatScreen> with RouteAware {
       child: switch (chatState) {
         AsyncValue(:final value?, hasValue: true) => PlatformScaffold(
           appBar: PlatformAppBar(
-            title: widget.options is TvChatOptions
-                ? Text(context.l10n.spectatorRoom)
-                : widget.options.isPublic
+            title: widget.options.isPublic
                 ? Text(context.l10n.chatRoom)
                 : widget.options.opponent == null
                 ? Text(context.l10n.chatRoom)

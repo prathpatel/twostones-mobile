@@ -1,6 +1,5 @@
 import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/exported_game.dart';
 import 'package:lichess_mobile/src/network/http.dart';
@@ -8,7 +7,7 @@ import 'package:lichess_mobile/src/service/game_share_service.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/share.dart';
-import 'package:lichess_mobile/src/view/analysis/analysis_screen.dart';
+import 'package:lichess_mobile/src/view/game/game_review_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/view/game/gif_export_dialog.dart';
@@ -44,12 +43,10 @@ void openGameScreen(
               ),
               lastMoveAt: lastMoveAt,
             )
-          : AnalysisScreen.buildRoute(
-              AnalysisOptions.archivedGame(
-                orientation: orientation,
-                gameId: game.id,
-                initialMoveCursor: 0,
-              ),
+          : GameReviewScreen.buildRoute(
+              orientation: orientation,
+              gameId: game.id,
+              initialMoveCursor: 0,
             ),
     );
   } else {

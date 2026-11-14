@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
-import 'package:lichess_mobile/src/view/engine/engine_gauge.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// A board thumbnail widget
@@ -175,8 +174,8 @@ class const _BoardThumbnailEvalGauge({
     final whiteBarHeight = height * (whiteWinningChances + 1) / 2;
 
     final children = [
-      Container(height: height - whiteBarHeight, color: EngineGauge.backgroundColor(context)),
-      Container(height: whiteBarHeight, color: EngineGauge.valueColor(context)),
+      Container(height: height - whiteBarHeight, color: ColorScheme.of(context).inverseSurface),
+      Container(height: whiteBarHeight, color: ColorScheme.of(context).surface),
     ];
     return Stack(
       alignment: Alignment.center,

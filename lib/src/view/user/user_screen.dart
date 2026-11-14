@@ -25,7 +25,6 @@ import 'package:lichess_mobile/src/view/user/recent_games.dart';
 import 'package:lichess_mobile/src/view/user/user_activity.dart';
 import 'package:lichess_mobile/src/view/user/user_profile.dart';
 import 'package:lichess_mobile/src/view/user/user_stats_section.dart';
-import 'package:lichess_mobile/src/view/watch/tv_screen.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/buttons.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
@@ -195,17 +194,6 @@ class const _UserProfileListView(
                   child: Row(
                     crossAxisAlignment: .start,
                     children: [
-                      Expanded(
-                        child: _UserActionButton(
-                          icon: Icons.live_tv_outlined,
-                          label: context.l10n.watch,
-                          isLive: isPlayingLive == true,
-                          onPressed: () {
-                            Navigator.of(context)
-                                .pushHidingTabBar(TvScreen.buildRoute(user: user.lightUser));
-                          },
-                        ),
-                      ),
                       if (authUser != null) ...[
                         if (user.canChallenge != null)
                           Expanded(
@@ -363,6 +351,9 @@ class const _UserActionButton({
   required final IconData icon,
   required final String label,
   required final VoidCallback? onPressed,
+  // Not passed for now: it marks the action that opens a game in progress, which comes back with
+  // the spectator screen.
+  // ignore: unused_element_parameter
   final bool isLive = false,
 }) extends StatelessWidget {
   @override

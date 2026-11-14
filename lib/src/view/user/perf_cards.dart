@@ -6,7 +6,6 @@ import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/account/rating_pref_aware.dart';
-import 'package:lichess_mobile/src/view/puzzle/storm_dashboard.dart';
 import 'package:lichess_mobile/src/view/user/perf_stats_screen.dart';
 import 'package:lichess_mobile/src/widgets/rating.dart';
 import 'package:material_ui/material_ui.dart';
@@ -158,9 +157,6 @@ class const PerfCards({
   }
 
   void _handlePerfCardTap(BuildContext context, Perf perf) {
-    Navigator.of(context).push(switch (perf) {
-      Perf.storm => StormDashboardModal.buildRoute(user.lightUser),
-      _ => PerfStatsScreen.buildRoute(user: user, perf: perf),
-    });
+    Navigator.of(context).push(PerfStatsScreen.buildRoute(user: user, perf: perf));
   }
 }
