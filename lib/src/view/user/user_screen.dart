@@ -17,12 +17,10 @@ import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/utils/share.dart';
 import 'package:lichess_mobile/src/view/message/conversation_screen.dart';
-import 'package:lichess_mobile/src/view/play/challenge_odd_bots_screen.dart';
 import 'package:lichess_mobile/src/view/play/create_challenge_bottom_sheet.dart';
 import 'package:lichess_mobile/src/view/user/game_history_screen.dart';
 import 'package:lichess_mobile/src/view/user/perf_cards.dart';
 import 'package:lichess_mobile/src/view/user/recent_games.dart';
-import 'package:lichess_mobile/src/view/user/user_activity.dart';
 import 'package:lichess_mobile/src/view/user/user_profile.dart';
 import 'package:lichess_mobile/src/view/user/user_stats_section.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
@@ -38,7 +36,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final _userScreenDataProvider = FutureProvider.autoDispose.family<UserScreenData, UserId>(
-  (ref, id) => ref.read(userRepositoryProvider).getUserScreenData(id),
+  (ref, id) => ref
+      .read(userRepositoryProvider)
+      .getUserScreenData(id, me: ref.watch(authControllerProvider)?.user.id),
   name: 'UserScreenDataProvider',
 );
 
@@ -61,17 +61,12 @@ class const UserScreen({required final LightUser user, super.key}) extends Consu
       );
       return;
     }
-    final isOddBot = oddBots.contains(user.name.toLowerCase());
-    if (isOddBot) {
-      Navigator.of(context).push(ChallengeOddBotsScreen.buildRoute(user));
-    } else {
-      showAdaptiveBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useRootNavigator: true,
-        builder: (_) => CreateChallengeBottomSheet(user: user, navigator: Navigator.of(context)),
-      );
-    }
+    showAdaptiveBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      builder: (_) => CreateChallengeBottomSheet(user: user, navigator: Navigator.of(context)),
+    );
   }
 
   @override
@@ -160,7 +155,7 @@ class const _UserProfileListView(
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final UserScreenData(:user, :recentGames, :activity, :isPlayingLive, :crosstable) = data;
+    final UserScreenData(:user, :recentGames, :crosstable) = data;
 
     final isOnline = ref.watch(isDeviceOnlineProvider);
     final nbOfGames = user.count?.all ?? 0;
@@ -334,7 +329,6 @@ class const _UserProfileListView(
           ),
           PerfCards(user: user, isMe: false),
           UserStatsSection(user: user, isMe: false),
-          UserActivityWidget(activity: AsyncData(activity), user: user.lightUser),
           RecentGamesWidget(
             recentGames: AsyncData(recentGames),
             nbOfGames: nbOfGames,

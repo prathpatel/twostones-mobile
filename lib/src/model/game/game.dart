@@ -330,21 +330,20 @@ sealed class const GoScore._() with _$GoScore {
   factory fromServerJson(Map<String, dynamic> json) => GoScore.fromPick(pick(json).required());
 
   factory fromPick(RequiredPick pick) {
-    final ownership = pick('ownership').asListOrEmpty(
-      (entry) => entry.asListOrThrow((value) => value.asIntOrThrow()),
-    );
+    final ownership = pick('ownership')
+        .asListOrEmpty((entry) => entry.asListOrThrow((value) => value.asIntOrThrow()));
     return GoScore(
-    black: pick('black').asDoubleOrThrow(),
-    white: pick('white').asDoubleOrThrow(),
-    komi: pick('komi').asDoubleOrThrow(),
-    result: pick('result').asStringOrThrow(),
-    blackTerritory: pick('territory', 'black').asIntOrThrow(),
-    whiteTerritory: pick('territory', 'white').asIntOrThrow(),
-    blackStones: pick('stones', 'black').asIntOrThrow(),
-    whiteStones: pick('stones', 'white').asIntOrThrow(),
-    blackArea: ISet(ownership.where((pair) => pair[1] == 1).map((pair) => pair[0])),
-    whiteArea: ISet(ownership.where((pair) => pair[1] != 1).map((pair) => pair[0])),
-  );
+      black: pick('black').asDoubleOrThrow(),
+      white: pick('white').asDoubleOrThrow(),
+      komi: pick('komi').asDoubleOrThrow(),
+      result: pick('result').asStringOrThrow(),
+      blackTerritory: pick('territory', 'black').asIntOrThrow(),
+      whiteTerritory: pick('territory', 'white').asIntOrThrow(),
+      blackStones: pick('stones', 'black').asIntOrThrow(),
+      whiteStones: pick('stones', 'white').asIntOrThrow(),
+      blackArea: ISet(ownership.where((pair) => pair[1] == 1).map((pair) => pair[0])),
+      whiteArea: ISet(ownership.where((pair) => pair[1] != 1).map((pair) => pair[0])),
+    );
   }
 
   /// The side each empty or dead point counts for.
@@ -382,10 +381,13 @@ sealed class const GoScoring._() with _$GoScoring {
 @immutable
 class const GameStep({
   required final GoPosition position,
+
   /// The move that led to [position], null for the first step of a game.
   final GoMove? move,
+
   /// The remaining white clock time at this step. Only available when the game is finished.
   final Duration? archivedWhiteClock,
+
   /// The remaining black clock time at this step. Only available when the game is finished.
   final Duration? archivedBlackClock,
 });

@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_preferences.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
 import 'package:lichess_mobile/src/model/go/go.dart';
@@ -19,17 +18,13 @@ import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
-import 'package:lichess_mobile/src/widgets/board_preview.dart';
-import 'package:lichess_mobile/src/widgets/expanded_section.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/non_linear_slider.dart';
 import 'package:lichess_mobile/src/widgets/user.dart';
-import 'package:lichess_mobile/src/widgets/variant_app_bar_title.dart';
 import 'package:material_ui/material_ui.dart';
 
 class const CreateChallengeBottomSheet({
   final LightUser? user,
-  final String? positionFen,
 
   /// The navigator where the game is pushed, by default the navigator of the sheet: for a sheet on
   /// the root navigator, the navigator of the screen that presents it, so that the game is pushed
@@ -42,32 +37,6 @@ class const CreateChallengeBottomSheet({
 
 class _CreateChallengeBottomSheetState() extends ConsumerState<CreateChallengeBottomSheet> {
   Future<ChallengeDeclineReason?>? _pendingCorrespondenceChallenge;
-  final _controller = TextEditingController();
-
-  String? fromPositionFenInput;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.positionFen != null) {
-      fromPositionFenInput = widget.positionFen;
-      _controller.text = widget.positionFen!;
-      ref.read(challengePreferencesProvider.notifier).setVariant(Variant.fromPosition);
-    } else {
-      fromPositionFenInput = null;
-    }
-    _controller.addListener(() {
-      setState(() {
-        fromPositionFenInput = _controller.text;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,10 +48,6 @@ class _CreateChallengeBottomSheetState() extends ConsumerState<CreateChallengeBo
         preferences.timeControl != ChallengeTimeControlType.clock ||
         preferences.clock.time > Duration.zero ||
         preferences.clock.increment > Duration.zero;
-
-    final isValidPosition =
-        (fromPositionFenInput != null && fromPositionFenInput!.isNotEmpty) ||
-        preferences.variant != Variant.fromPosition;
 
     switch (accountAsync) {
       case AsyncError():
@@ -238,37 +203,43 @@ class _CreateChallengeBottomSheetState() extends ConsumerState<CreateChallengeBo
               ),
             ],
             ListTile(
-              title: Text(context.l10n.variant),
+              title: const Text('Board size'),
               trailing: TextButton(
                 onPressed: () {
                   showChoicePicker(
                     context,
-                    choices: playSupportedVariants.toList(),
-                    selectedItem: preferences.variant,
-                    labelBuilder: (variant) => VariantLabel(variant),
-                    onSelectedItemChanged: (Variant variant) {
-                      ref.read(challengePreferencesProvider.notifier).setVariant(variant);
+                    choices: kGoBoardSizes,
+                    selectedItem: preferences.boardSize,
+                    labelBuilder: (size) => Text('$size×$size'),
+                    onSelectedItemChanged: (int size) {
+                      final notifier = ref.read(challengePreferencesProvider.notifier);
+                      notifier.setBoardSize(size);
+                      // a 9×9 board takes five handicap stones at most
+                      if (size == 9 && preferences.handicap > 5) notifier.setHandicap(5);
                     },
                   );
                 },
-                child: Text(preferences.variant.label(context.l10n)),
+                child: Text('${preferences.boardSize}×${preferences.boardSize}'),
               ),
             ),
-            ExpandedSection(
-              expand: preferences.variant == Variant.fromPosition,
-              child: SmallBoardPreview(
-                orientation: preferences.sideChoice == SideChoice.black ? Side.black : Side.white,
-                fen: fromPositionFenInput ?? kEmptyFEN,
-                description: TextField(
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    labelText: context.l10n.pasteTheFenStringHere,
-                    suffixIcon: const Icon(Icons.paste),
-                  ),
-                  controller: _controller,
-                  readOnly: true,
-                  onTap: () => pasteFenFromClipboard(context, _controller),
-                ),
+            ListTile(
+              title: const Text('Handicap'),
+              subtitle: preferences.handicap > 0
+                  ? const Text('Black starts with stones on the board, and White plays first.')
+                  : null,
+              trailing: TextButton(
+                onPressed: () {
+                  showChoicePicker(
+                    context,
+                    choices: [0, for (var h = 2; h <= (preferences.boardSize == 9 ? 5 : 9); h++) h],
+                    selectedItem: preferences.handicap,
+                    labelBuilder: (handicap) => Text(handicap == 0 ? 'None' : '$handicap stones'),
+                    onSelectedItemChanged: (int handicap) {
+                      ref.read(challengePreferencesProvider.notifier).setHandicap(handicap);
+                    },
+                  );
+                },
+                child: Text(preferences.handicap == 0 ? 'None' : '${preferences.handicap} stones'),
               ),
             ),
             ListTile(
@@ -308,16 +279,10 @@ class _CreateChallengeBottomSheetState() extends ConsumerState<CreateChallengeBo
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   child: FilledButton(
                     onPressed: timeControl == ChallengeTimeControlType.clock || widget.user == null
-                        ? isValidTimeControl && isValidPosition
+                        ? isValidTimeControl
                               ? () {
                                   final source = UserChallengeSource(
-                                    preferences.makeRequest(
-                                      account,
-                                      widget.user,
-                                      preferences.variant != Variant.fromPosition
-                                          ? null
-                                          : fromPositionFenInput,
-                                    ),
+                                    preferences.makeRequest(account, widget.user),
                                   );
                                   // Invalidate any stale provider state from a previous game
                                   // with the same source (same opponent + settings), so the
@@ -339,13 +304,7 @@ class _CreateChallengeBottomSheetState() extends ConsumerState<CreateChallengeBo
                             setState(() {
                               _pendingCorrespondenceChallenge = createGameService
                                   .newCorrespondenceChallenge(
-                                    preferences.makeRequest(
-                                      account,
-                                      widget.user,
-                                      preferences.variant != Variant.fromPosition
-                                          ? null
-                                          : fromPositionFenInput,
-                                    ),
+                                    preferences.makeRequest(account, widget.user),
                                   );
                             });
 

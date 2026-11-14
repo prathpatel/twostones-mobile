@@ -169,10 +169,10 @@ class GameScreenLoaderNotifier(final GameScreenSource source)
 
 /// User game preferences, defined server-side.
 final userGamePrefsProvider = FutureProvider.autoDispose
-    .family<
-      ({ServerGamePrefs? prefs, bool shouldConfirmMove, bool isZenModeEnabled}),
-      GameFullId
-    >((Ref ref, GameFullId gameId) async {
+    .family<({ServerGamePrefs? prefs, bool shouldConfirmMove, bool isZenModeEnabled}), GameFullId>((
+      Ref ref,
+      GameFullId gameId,
+    ) async {
       final state = await ref.watch(gameControllerProvider(gameId).future);
       return (
         prefs: state.game.prefs,

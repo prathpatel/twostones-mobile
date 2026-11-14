@@ -41,6 +41,7 @@ import 'package:material_ui/material_ui.dart';
 /// The screen will show a loading board while the game is being created.
 class const GameScreen({
   required final GameScreenSource source,
+
   /// The position to show while the game loads, when the screen it is opened from knows it.
   final GoPosition? loadingPosition,
 

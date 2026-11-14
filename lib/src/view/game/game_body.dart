@@ -235,10 +235,7 @@ _BoardData? _boardDataOf(AsyncValue<GameState> state) {
     deadStones: showCount ? scoring.dead : const ISet<int>.empty(),
     territory: showCount ? scoring.score.ownership : const IMap<int, Side>.empty(),
     canTap: game.youAre != null && game.playable,
-    moves: game.steps
-        .skip(1)
-        .map((step) => step.move!.coord(game.meta.boardSize))
-        .toIList(),
+    moves: game.steps.skip(1).map((step) => step.move!.coord(game.meta.boardSize)).toIList(),
     cursor: s.stepCursor,
     moveError: s.moveError,
   );
@@ -510,10 +507,7 @@ class const _ScoringPanel({required final GameFullId id}) extends ConsumerWidget
                 children: [
                   Text(
                     data.result != null ? 'Counting: ${data.result}' : 'Counting',
-                    style: TextStyle(
-                      fontWeight: .bold,
-                      color: colorScheme.onSecondaryContainer,
-                    ),
+                    style: TextStyle(fontWeight: .bold, color: colorScheme.onSecondaryContainer),
                   ),
                   Text(
                     !data.isPlayer

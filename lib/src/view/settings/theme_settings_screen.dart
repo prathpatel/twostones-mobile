@@ -1,23 +1,16 @@
-import 'package:chessground/chessground.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/constants.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/go/go.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
-import 'package:lichess_mobile/src/styles/lichess_icons.dart';
-import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/color_palette.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/utils/screen.dart';
 import 'package:lichess_mobile/src/view/settings/background_theme_choice_screen.dart';
-import 'package:lichess_mobile/src/view/settings/board_choice_screen.dart';
 import 'package:lichess_mobile/src/view/settings/color_scheme_debug_screen.dart';
-import 'package:lichess_mobile/src/view/settings/piece_set_screen.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
+import 'package:lichess_mobile/src/widgets/board_thumbnail.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
 import 'package:lichess_mobile/src/widgets/settings.dart';
@@ -37,34 +30,14 @@ class const ThemeSettingsScreen({super.key}) extends ConsumerWidget {
   }
 }
 
-String shapeColorL10n(ShapeColor shapeColor) => switch (shapeColor) {
-  ShapeColor.green => 'Green',
-  ShapeColor.red => 'Red',
-  ShapeColor.blue => 'Blue',
-  ShapeColor.yellow => 'Yellow',
-};
-
 class const _Body() extends ConsumerStatefulWidget {
   @override
   ConsumerState<_Body> createState() => _BodyState();
 }
 
 class _BodyState() extends ConsumerState<_Body> {
-  late double brightness;
-  late double contrast;
-  late double hue;
-
   /// Whether the user has selected a custom background, even if none is set yet.
   bool customBackgroundSelected = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final boardPrefs = ref.read(boardPreferencesProvider);
-    brightness = boardPrefs.brightness;
-    contrast = boardPrefs.contrast;
-    hue = boardPrefs.hue;
-  }
 
   /// Opens the custom background selection screen.
   ///
@@ -82,33 +55,20 @@ class _BodyState() extends ConsumerState<_Body> {
   @override
   Widget build(BuildContext context) {
     final generalPrefs = ref.watch(generalPreferencesProvider);
-    final boardPrefs = ref.watch(boardPreferencesProvider);
 
     final bool isCustomBackground = generalPrefs.isForcedDarkMode || customBackgroundSelected;
     final BackgroundColor? backgroundColor = generalPrefs.backgroundColor?.$1;
 
-    final bool hasAjustedColors =
-        brightness != kBoardDefaultBrightnessFilter ||
-        contrast != kBoardDefaultContrastFilter ||
-        hue != kBoardDefaultHueFilter;
-
     final boardSize = isTabletOrLarger(context) ? 350.0 : 200.0;
-
-    // Dimming the boards in dark mode overrides the brightness filter.
-    final isDimmed = boardPrefs.isDimmed(Theme.of(context).brightness);
-    final disabledSliderColor = ColorScheme.of(context).onSurface.withValues(alpha: 0.38);
 
     return SafeArea(
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
-            child: _BoardPreview(
+            child: StaticGoBoard(
               size: boardSize,
-              boardPrefs: boardPrefs,
-              brightness: isDimmed ? kBoardDimmedBrightnessFilter : brightness,
-              contrast: contrast,
-              hue: hue,
+              position: replayGoGame(size: 9, moves: const ['ee', 'ec', 'ce', 'cc', 'gc']).last,
             ),
           ),
           Expanded(
@@ -186,181 +146,13 @@ class _BodyState() extends ConsumerState<_Body> {
                             : null,
                         onTap: pickCustomBackground,
                       ),
-                    SettingsListTile(
-                      icon: const Icon(LichessIcons.chess_board),
-                      settingsLabel: Text(context.l10n.board),
-                      settingsValue: boardPrefs.boardTheme.label,
-                      onTap: () {
-                        Navigator.of(context).push(BoardChoiceScreen.buildRoute());
-                      },
-                    ),
-                    SwitchSettingTile(
-                      leading: const Icon(Icons.dark_mode_outlined),
-                      title: const Text('Dim board in dark mode'),
-                      value: boardPrefs.dimInDarkMode,
-                      onChanged: (value) {
-                        ref.read(boardPreferencesProvider.notifier).toggleDimInDarkMode();
-                      },
-                    ),
-                    SettingsListTile(
-                      icon: const Icon(LichessIcons.chess_pawn),
-                      settingsLabel: Text(context.l10n.pieceSet),
-                      settingsValue: boardPrefs.pieceSet.label,
-                      onTap: () {
-                        Navigator.of(context).push(PieceSetScreen.buildRoute());
-                      },
-                    ),
-                    SettingsListTile(
-                      icon: const Icon(LichessIcons.arrow_full_upperright),
-                      settingsLabel: Text(context.l10n.mobileSettingsDrawnShapeColor),
-                      explanation: context.l10n.mobileSettingsDrawnShapeColorHelp,
-                      settingsValue: shapeColorL10n(boardPrefs.shapeColor),
-                      trailing: _ColorCircle(color: boardPrefs.shapeColor.color),
-                      onTap: () {
-                        showChoicePicker(
-                          context,
-                          choices: ShapeColor.values,
-                          selectedItem: boardPrefs.shapeColor,
-                          labelBuilder: (t) => _ColorCircle(color: t.color),
-                          onSelectedItemChanged: (ShapeColor? value) {
-                            ref
-                                .read(boardPreferencesProvider.notifier)
-                                .setShapeColor(value ?? ShapeColor.green);
-                          },
-                        );
-                      },
-                    ),
-                    SwitchSettingTile(
-                      leading: const Icon(Icons.location_on),
-                      title: Text(context.l10n.preferencesBoardCoordinates),
-                      value: boardPrefs.coordinates,
-                      onChanged: (value) {
-                        ref.read(boardPreferencesProvider.notifier).toggleCoordinates();
-                      },
-                    ),
-                    SwitchSettingTile(
-                      leading: const Icon(Icons.border_outer),
-                      title: Text(context.l10n.mobileSettingsShowBorder),
-                      value: boardPrefs.showBorder,
-                      onChanged: (value) {
-                        ref.read(boardPreferencesProvider.notifier).toggleBorder();
-                      },
-                    ),
-                  ],
-                ),
-                ListSection(
-                  hasLeading: true,
-                  children: [
-                    ExpansionTile(
-                      leading: const Icon(Icons.tune),
-                      title: Text(context.l10n.advancedSettings),
-                      shape: const Border(),
-                      collapsedShape: const Border(),
-                      children: [
-                        ListTile(
-                          enabled: !isDimmed,
-                          leading: const Icon(Icons.brightness_6),
-                          subtitle: isDimmed
-                              ? const Text('Not available while "Dim board in dark mode" is on')
-                              : null,
-                          title: Slider.adaptive(
-                            min: 0.2,
-                            max: 1.4,
-                            value: brightness,
-                            // The Cupertino slider has no disabled colors.
-                            activeColor: isDimmed ? disabledSliderColor : null,
-                            thumbColor: isDimmed
-                                ? Color.alphaBlend(
-                                    disabledSliderColor,
-                                    ColorScheme.of(context).surface,
-                                  )
-                                : null,
-                            onChanged: isDimmed
-                                ? null
-                                : (value) {
-                                    setState(() {
-                                      brightness = value;
-                                    });
-                                  },
-                            onChangeEnd: (value) {
-                              ref
-                                  .read(boardPreferencesProvider.notifier)
-                                  .adjustColors(brightness: brightness);
-                            },
-                          ),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.tonality),
-                          title: Slider.adaptive(
-                            min: 0.4,
-                            max: 2.0,
-                            value: contrast,
-                            onChanged: (value) {
-                              setState(() {
-                                contrast = value;
-                              });
-                            },
-                            onChangeEnd: (value) {
-                              ref
-                                  .read(boardPreferencesProvider.notifier)
-                                  .adjustColors(contrast: contrast);
-                            },
-                          ),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.invert_colors),
-                          title: Slider.adaptive(
-                            min: 0.0,
-                            max: 360.0,
-                            value: hue,
-                            onChanged: (value) {
-                              setState(() {
-                                hue = value;
-                              });
-                            },
-                            onChangeEnd: (value) {
-                              ref.read(boardPreferencesProvider.notifier).adjustColors(hue: hue);
-                            },
-                          ),
-                        ),
-                        ListTile(
-                          enabled: hasAjustedColors,
-                          leading: Icon(
-                            Icons.clear,
-                            color: hasAjustedColors ? lichessCustomColors.red : null,
-                          ),
-                          title: Text(
-                            context.l10n.boardReset,
-                            style: TextStyle(
-                              color: hasAjustedColors ? lichessCustomColors.red : null,
-                            ),
-                          ),
-                          onTap: hasAjustedColors
-                              ? () {
-                                  setState(() {
-                                    brightness = kBoardDefaultBrightnessFilter;
-                                    contrast = kBoardDefaultContrastFilter;
-                                    hue = kBoardDefaultHueFilter;
-                                  });
-                                  ref
-                                      .read(boardPreferencesProvider.notifier)
-                                      .adjustColors(
-                                        brightness: brightness,
-                                        contrast: contrast,
-                                        hue: hue,
-                                      );
-                                }
-                              : null,
-                        ),
-                        if (kDebugMode)
-                          ListTile(
-                            leading: const Icon(Icons.palette_outlined),
-                            title: const Text('Color scheme (debug)'),
-                            onTap: () =>
-                                Navigator.of(context).push(ColorSchemeDebugScreen.buildRoute()),
-                          ),
-                      ],
-                    ),
+                    if (kDebugMode)
+                      ListTile(
+                        leading: const Icon(Icons.palette_outlined),
+                        title: const Text('Color scheme (debug)'),
+                        onTap: () =>
+                            Navigator.of(context).push(ColorSchemeDebugScreen.buildRoute()),
+                      ),
                   ],
                 ),
               ],
@@ -383,45 +175,6 @@ class const _ColorCircle({required final Color color}) extends StatelessWidget {
         color: color,
         shape: BoxShape.circle,
         border: Border.all(color: ColorScheme.of(context).outlineVariant),
-      ),
-    );
-  }
-}
-
-class const _BoardPreview({
-  required final double size,
-  required final BoardPrefs boardPrefs,
-  required final double brightness,
-  required final double contrast,
-  required final double hue,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: StaticChessboard(
-        size: size,
-        orientation: Side.white,
-        lastMove: const NormalMove(from: Square.e2, to: Square.e4),
-        fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1',
-        shapes: {
-          Circle(color: boardPrefs.shapeColor.color, orig: Square.fromName('b8')),
-          Arrow(
-            color: boardPrefs.shapeColor.color,
-            orig: Square.fromName('b8'),
-            dest: Square.fromName('c6'),
-          ),
-        },
-        settings: StaticChessboardSettings.fromBoardSettings(
-          boardPrefs
-              .toBoardSettings(Variant.standard, appBrightness: Theme.of(context).brightness)
-              .copyWith(
-                brightness: brightness,
-                contrast: contrast,
-                hue: hue,
-                borderRadius: Styles.boardBorderRadius,
-                boxShadow: boardShadows,
-              ),
-        ),
       ),
     );
   }

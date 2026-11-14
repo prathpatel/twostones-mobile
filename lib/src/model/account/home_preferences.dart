@@ -42,23 +42,6 @@ class HomePreferences() extends Notifier<HomePrefs> with SessionPreferencesStora
     );
     return save(newState);
   }
-
-  Future<void> setTimeControlConfig({
-    required IList<TimeIncrement> disabledTimeControls,
-    required bool customButtonEnabled,
-  }) {
-    final enabledCount =
-        TimeIncrement.matrixPresets.length -
-        disabledTimeControls.length +
-        (customButtonEnabled ? 1 : 0);
-    if (enabledCount < 1) return Future.value();
-    return save(
-      state.copyWith(
-        disabledTimeControls: disabledTimeControls,
-        customButtonEnabled: customButtonEnabled,
-      ),
-    );
-  }
 }
 
 @Freezed(fromJson: true, toJson: true)

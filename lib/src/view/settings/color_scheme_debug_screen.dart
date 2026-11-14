@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
 import 'package:lichess_mobile/src/theme.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
@@ -41,10 +41,7 @@ class _ColorSchemeDebugScreenState() extends ConsumerState<ColorSchemeDebugScree
 
   @override
   Widget build(BuildContext context) {
-    final boardSeed = ref
-        .watch(boardPreferencesProvider.select((prefs) => prefs.boardTheme))
-        .colors
-        .darkSquare;
+    const boardSeed = kBoardWoodColor;
     // Same seed as `makeAppTheme`.
     final backgroundSeed = ref.watch(
       generalPreferencesProvider.select(

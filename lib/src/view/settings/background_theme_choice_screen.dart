@@ -2,13 +2,11 @@ import 'dart:io';
 import 'dart:math' show max;
 import 'dart:ui' as ui;
 
-import 'package:chessground/chessground.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
-import 'package:dartchess/dartchess.dart' show Side, kInitialFEN;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/preloaded_data.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
@@ -16,6 +14,7 @@ import 'package:lichess_mobile/src/utils/image.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/widgets/background.dart';
+import 'package:lichess_mobile/src/widgets/board_thumbnail.dart';
 import 'package:lichess_mobile/src/widgets/bottom_bar.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
@@ -273,18 +272,11 @@ class _ConfirmColorBackgroundScreenState() extends State<ConfirmColorBackgroundS
                         padding: EdgeInsets.only(
                           left: orientation == Orientation.portrait ? 0 : 16.0,
                         ),
-                        child: StaticChessboard(
+                        child: StaticGoBoard(
                           size: orientation == Orientation.portrait
                               ? constraints.maxWidth
                               : constraints.maxHeight - landscapeBoardPadding * 2,
-                          fen: kInitialFEN,
-                          orientation: Side.white,
-                          settings: StaticChessboardSettings.fromBoardSettings(
-                            widget.boardPrefs.toBoardSettings(
-                              Variant.standard,
-                              appBrightness: Theme.of(context).brightness,
-                            ),
-                          ),
+                          position: GoPosition.initial(19, handicap: 9),
                         ),
                       ),
                     ),
@@ -471,18 +463,11 @@ class _ConfirmImageBackgroundScreenState() extends State<ConfirmImageBackgroundS
                       padding: EdgeInsets.only(
                         left: widget.viewportOrientation == Orientation.portrait ? 0 : 16.0,
                       ),
-                      child: StaticChessboard(
+                      child: StaticGoBoard(
                         size: widget.viewportOrientation == Orientation.portrait
                             ? widget.viewport.width
                             : widget.viewport.height - landscapeBoardPadding * 2,
-                        fen: kInitialFEN,
-                        orientation: Side.white,
-                        settings: StaticChessboardSettings.fromBoardSettings(
-                          widget.boardPrefs.toBoardSettings(
-                            Variant.standard,
-                            appBrightness: Theme.of(context).brightness,
-                          ),
-                        ),
+                        position: GoPosition.initial(19, handicap: 9),
                       ),
                     ),
                   ),

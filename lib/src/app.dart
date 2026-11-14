@@ -73,7 +73,6 @@ class const Application({super.key}) extends ConsumerStatefulWidget {
 
 class _AppState() extends ConsumerState<Application> {
   /// Whether the app has checked for online status for the first time.
-  final bool _firstTimeOnlineCheck = false;
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override

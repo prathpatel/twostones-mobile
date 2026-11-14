@@ -129,9 +129,7 @@ sealed class const User._() with _$User {
       perfs: IMap({
         for (final entry in receivedPerfsMap.entries)
           if (Perf.nameMap.containsKey(entry.key))
-            Perf.nameMap.get(entry.key)!: (['storm', 'streak'].contains(entry.key))
-                ? UserPerf.fromJsonStreak(entry.value)
-                : UserPerf.fromJson(entry.value),
+            Perf.nameMap.get(entry.key)!: UserPerf.fromJson(entry.value),
       }),
       followable: pick('followable').asBoolOrNull(),
       following: pick('following').asBoolOrNull(),
@@ -227,14 +225,6 @@ sealed class const UserPerf._() with _$UserPerf {
     provisional: pick('prov').asBoolOrNull(),
   );
 
-  factory fromJsonStreak(Map<String, dynamic> json) => UserPerf(
-    rating: UserActivityStreak.fromJson(json).score,
-    ratingDeviation: 0,
-    progression: 0,
-    runs: UserActivityStreak.fromJson(json).runs,
-    provisional: null,
-  );
-
   int get numberOfGamesOrRuns => games ?? runs ?? 0;
 }
 
@@ -253,165 +243,6 @@ sealed class UserStatus with _$UserStatus {
   );
 }
 
-@freezed
-sealed class UserActivityTournament with _$UserActivityTournament {
-  const factory({
-    required String id,
-    required String name,
-    required int nbGames,
-    required int score,
-    required int rank,
-    required int rankPercent,
-  }) = _UserActivityTournament;
-
-  factory fromJson(Map<String, dynamic> json) =>
-      UserActivityTournament.fromPick(pick(json).required());
-
-  factory fromPick(RequiredPick pick) => UserActivityTournament(
-    id: pick('tournament', 'id').asStringOrThrow(),
-    name: pick('tournament', 'name').asStringOrThrow(),
-    nbGames: pick('nbGames').asIntOrThrow(),
-    score: pick('score').asIntOrThrow(),
-    rank: pick('rank').asIntOrThrow(),
-    rankPercent: pick('rankPercent').asIntOrThrow(),
-  );
-}
-
-@freezed
-sealed class UserActivityStreak with _$UserActivityStreak {
-  const factory({required int runs, required int score}) = _UserActivityStreak;
-
-  factory fromJson(Map<String, dynamic> json) => UserActivityStreak.fromPick(pick(json).required());
-
-  factory fromPick(RequiredPick pick) =>
-      UserActivityStreak(runs: pick('runs').asIntOrThrow(), score: pick('score').asIntOrThrow());
-}
-
-@freezed
-sealed class UserActivityScore with _$UserActivityScore {
-  const factory({
-    required int win,
-    required int loss,
-    required int draw,
-    required int ratingBefore,
-    required int ratingAfter,
-  }) = _UserActivityScore;
-
-  factory fromJson(Map<String, dynamic> json) => UserActivityScore.fromPick(pick(json).required());
-
-  factory fromPick(RequiredPick pick) => UserActivityScore(
-    win: pick('win').asIntOrThrow(),
-    loss: pick('loss').asIntOrThrow(),
-    draw: pick('draw').asIntOrThrow(),
-    ratingBefore: pick('rp', 'before').asIntOrThrow(),
-    ratingAfter: pick('rp', 'after').asIntOrThrow(),
-  );
-}
-
-@freezed
-sealed class const UserActivity._() with _$UserActivity {
-  const factory({
-    required DateTime startTime,
-    required DateTime endTime,
-    IMap<Perf, UserActivityScore>? games,
-    int? followInNb,
-    int? followOutNb,
-    UserActivityTournament? bestTournament,
-    int? tournamentNb,
-    UserActivityScore? puzzles,
-    UserActivityStreak? streak,
-    UserActivityStreak? storm,
-    IMap<Perf, UserActivityScore>? correspondenceEnds,
-    int? correspondenceMovesNb,
-    int? correspondenceGamesNb,
-  }) = _UserActivity;
-
-  bool get isEmpty =>
-      games == null &&
-      followInNb == null &&
-      followOutNb == null &&
-      tournamentNb == null &&
-      bestTournament == null &&
-      puzzles == null &&
-      streak == null &&
-      storm == null &&
-      correspondenceEnds == null &&
-      correspondenceMovesNb == null &&
-      correspondenceGamesNb == null;
-
-  bool get isNotEmpty => !isEmpty;
-}
-
-@freezed
-sealed class UserPerfStats with _$UserPerfStats {
-  const factory({
-    required double rating,
-    required double deviation,
-    bool? provisional,
-    required int totalGames,
-    required int progress,
-    int? rank,
-    double? percentile,
-    required int berserkGames,
-    required int tournamentGames,
-    required int ratedGames,
-    required int wonGames,
-    required int lostGames,
-    required int drawnGames,
-    required int disconnections,
-    double? avgOpponent,
-    required Duration timePlayed,
-    int? lowestRating,
-    UserPerfGame? lowestRatingGame,
-    int? highestRating,
-    UserPerfGame? highestRatingGame,
-    UserStreak? curWinStreak,
-    UserStreak? maxWinStreak,
-    UserStreak? curLossStreak,
-    UserStreak? maxLossStreak,
-    UserStreak? curPlayStreak,
-    UserStreak? maxPlayStreak,
-    UserStreak? curTimeStreak,
-    UserStreak? maxTimeStreak,
-    IList<UserPerfGame>? worstLosses,
-    IList<UserPerfGame>? bestWins,
-  }) = _UserPerfStats;
-}
-
-@freezed
-sealed class UserStreak with _$UserStreak {
-  const factory gameStreak({
-    required int gamesPlayed,
-    required bool isValueEmpty,
-    required UserPerfGame? startGame,
-    required UserPerfGame? endGame,
-  }) = UserGameStreak;
-
-  const factory timeStreak({
-    required Duration timePlayed,
-    required bool isValueEmpty,
-    required UserPerfGame? startGame,
-    required UserPerfGame? endGame,
-  }) = UserTimeStreak;
-}
-
-@freezed
-sealed class const UserPerfGame._() with _$UserPerfGame {
-  const factory({
-    required DateTime finishedAt,
-    required GameId gameId,
-    int? opponentRating,
-    String? opponentId,
-    String? opponentName,
-    String? opponentTitle,
-  }) = _UserPerfGame;
-
-  LightUser? get opponent => opponentId != null && opponentName != null
-      ? LightUser(id: UserId(opponentId!), name: opponentName!, title: opponentTitle)
-      : null;
-}
-
-@immutable
 class const UserRatingHistoryPerf({
   required final Perf perf,
   required final IList<UserRatingHistoryPoint> points,

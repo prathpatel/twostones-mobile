@@ -1,6 +1,5 @@
-import 'package:lichess_mobile/src/constants.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/account/ongoing_game.dart';
 import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';

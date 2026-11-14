@@ -17,14 +17,6 @@ sealed class Leaderboard with _$Leaderboard {
     required List<LeaderboardUser> rapid,
     required List<LeaderboardUser> classical,
     required List<LeaderboardUser> ultrabullet,
-    required List<LeaderboardUser> crazyhouse,
-    required List<LeaderboardUser> chess960,
-    required List<LeaderboardUser> kingOfThehill,
-    required List<LeaderboardUser> threeCheck,
-    required List<LeaderboardUser> antichess,
-    required List<LeaderboardUser> atomic,
-    required List<LeaderboardUser> horde,
-    required List<LeaderboardUser> racingKings,
   }) = _Leaderboard;
 }
 

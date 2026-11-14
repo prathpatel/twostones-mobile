@@ -82,8 +82,7 @@ class const _ChallengeListItem({
               title: context.l10n.mobileDoYouAcceptChallenge,
             )
           : null,
-      onAccept:
-          challenge.direction == ChallengeDirection.outward || !challenge.variant.isPlaySupported
+      onAccept: challenge.direction == ChallengeDirection.outward
           ? null
           : () => challengeService.acceptChallenge(challenge.id),
       onCancel: challenge.direction == ChallengeDirection.outward

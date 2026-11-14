@@ -1,7 +1,7 @@
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoIcons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
 import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
@@ -17,7 +17,6 @@ import 'package:lichess_mobile/src/view/play/time_control_modal.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
 import 'package:lichess_mobile/src/widgets/platform_alert_dialog.dart';
-import 'package:lichess_mobile/src/widgets/variant_app_bar_title.dart';
 import 'package:material_ui/material_ui.dart';
 
 class const CreateGameWidget({
@@ -91,31 +90,24 @@ class const CreateGameWidget({
               child: Semantics(
                 container: true,
                 button: true,
-                label: '${context.l10n.variant}: ${playPrefs.customVariant.label(context.l10n)}',
+                label: 'Board size: ${playPrefs.boardSize}×${playPrefs.boardSize}',
                 excludeSemantics: true,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(context.l10n.variant, style: labelStyle),
+                    Text('Board size', style: labelStyle),
                     _PickerButton(
-                      icon: playPrefs.customVariant != Variant.standard
-                          ? playPrefs.customVariant.icon
-                          : null,
-                      label: Text(playPrefs.customVariant.label(context.l10n)),
+                      label: Text('${playPrefs.boardSize}×${playPrefs.boardSize}'),
                       onPressed: () {
                         showChoicePicker(
                           context,
-                          title: Text(context.l10n.variant),
-                          choices: playSupportedVariants
-                              .where((v) => v != Variant.fromPosition)
-                              .toList(),
-                          selectedItem: playPrefs.customVariant,
-                          labelBuilder: (variant) => VariantLabel(variant),
-                          onSelectedItemChanged: (Variant variant) {
-                            ref
-                                .read(gameSetupPreferencesProvider.notifier)
-                                .setCustomVariant(variant);
+                          title: const Text('Board size'),
+                          choices: kGoBoardSizes,
+                          selectedItem: playPrefs.boardSize,
+                          labelBuilder: (size) => Text('$size×$size'),
+                          onSelectedItemChanged: (int size) {
+                            ref.read(gameSetupPreferencesProvider.notifier).setBoardSize(size);
                           },
                         );
                       },

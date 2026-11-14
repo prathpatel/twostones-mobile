@@ -1,9 +1,6 @@
-import 'dart:math';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
@@ -13,7 +10,6 @@ import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/styles/icon_extensions.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
-import 'package:lichess_mobile/src/widgets/board_thumbnail.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/swipe_actions.dart';
 import 'package:lichess_mobile/src/widgets/user.dart';
@@ -35,8 +31,6 @@ class const ChallengeListItem({
 
     final color = isMyChallenge ? context.lichessColors.green.withValues(alpha: 0.2) : null;
 
-    final isFromPosition = challenge.variant == Variant.fromPosition;
-
     final leading = Icon(challenge.perf.icon);
     final trailing = challenge.challenger?.lagRating != null
         ? LagIndicator(lagRating: challenge.challenger!.lagRating!)
@@ -50,8 +44,6 @@ class const ChallengeListItem({
           )
         : UserFullNameWidget(user: challengerUser, rating: challenge.challenger?.rating);
     final subtitle = Text(challenge.description(context.l10n));
-
-    final screenWidth = MediaQuery.widthOf(context);
 
     return SwipeActions(
       extentRatio: 0.6,
@@ -82,32 +74,14 @@ class const ChallengeListItem({
             label: context.l10n.accept,
           ),
       ],
-      child: isFromPosition
-          ? ExpansionTile(
-              backgroundColor: color,
-              childrenPadding: Styles.bodyPadding.subtract(const EdgeInsets.only(top: 8.0)),
-              leading: leading,
-              title: title,
-              subtitle: subtitle,
-              children: [
-                if (challenge.variant == Variant.fromPosition && challenge.initialFen != null)
-                  BoardThumbnail(
-                    size: min(400, screenWidth - 2 * Styles.bodyPadding.horizontal),
-                    orientation: challenge.sideChoice == SideChoice.white ? Side.white : Side.black,
-                    fen: challenge.initialFen!,
-                    onTap: onPressed,
-                  ),
-              ],
-              // onTap: onPressed,
-            )
-          : ListTile(
-              tileColor: color,
-              leading: leading,
-              title: title,
-              subtitle: subtitle,
-              trailing: trailing,
-              onTap: onPressed,
-            ),
+      child: ListTile(
+        tileColor: color,
+        leading: leading,
+        title: title,
+        subtitle: subtitle,
+        trailing: trailing,
+        onTap: onPressed,
+      ),
     );
   }
 }
@@ -125,7 +99,7 @@ class const CorrespondenceChallengeListItem({
       challenge: Challenge(
         id: ChallengeId(seek.id.value),
         status: ChallengeStatus.created,
-        variant: seek.variant,
+        boardSize: seek.boardSize,
         speed: Speed.correspondence,
         timeControl: seek.days != null
             ? ChallengeTimeControlType.correspondence

@@ -13,8 +13,6 @@ import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/challenge/challenges.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
-import 'package:lichess_mobile/src/model/correspondence/correspondence_game_storage.dart';
-import 'package:lichess_mobile/src/model/correspondence/offline_correspondence_game.dart';
 import 'package:lichess_mobile/src/model/game/game_history.dart';
 import 'package:lichess_mobile/src/model/message/message_repository.dart';
 import 'package:lichess_mobile/src/model/relation/following_user.dart';
@@ -31,10 +29,8 @@ import 'package:lichess_mobile/src/view/account/account_menu.dart';
 import 'package:lichess_mobile/src/view/account/profile_screen.dart';
 import 'package:lichess_mobile/src/view/auth/sign_in_error.dart';
 import 'package:lichess_mobile/src/view/auth/sign_in_options.dart';
-import 'package:lichess_mobile/src/view/correspondence/offline_correspondence_game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
-import 'package:lichess_mobile/src/view/game/offline_correspondence_games_screen.dart';
 import 'package:lichess_mobile/src/view/home/following_carousel.dart';
 import 'package:lichess_mobile/src/view/home/games_carousel.dart';
 import 'package:lichess_mobile/src/view/message/conversation_screen.dart';
@@ -126,7 +122,6 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
             final authUser = ref.watch(authControllerProvider);
             final unreadLichessMessage = ref.watch(unreadMessagesProvider).value?.lichess == true;
             final ongoingGames = ref.watch(ongoingGamesProvider);
-            final offlineCorresGames = ref.watch(offlineOngoingCorrespondenceGamesProvider);
             final recentGames = ref.watch(myRecentGamesProvider);
             final nbOfGames = ref.watch(userNumberOfGamesProvider(null)).value ?? 0;
             final isTablet = isTabletOrLarger(context);
@@ -249,9 +244,7 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                           const SizedBox(height: 8.0),
                           const _TabletCreateAGameSection(),
                           if (hasServerContent)
-                            _OngoingGamesPreview(ongoingGames, maxGamesToShow: 5)
-                          else
-                            _OfflineCorrespondencePreview(offlineCorresGames, maxGamesToShow: 5),
+                            _OngoingGamesPreview(ongoingGames, maxGamesToShow: 5),
                         ],
                       ),
                     ),
@@ -274,16 +267,8 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
               ];
             } else {
               final hasOngoingGames =
-                  (hasServerContent &&
-                      ongoingGames.maybeWhen(
-                        data: (data) => data.isNotEmpty,
-                        orElse: () => false,
-                      )) ||
-                  (!hasServerContent &&
-                      offlineCorresGames.maybeWhen(
-                        data: (data) => data.isNotEmpty,
-                        orElse: () => false,
-                      ));
+                  hasServerContent &&
+                  ongoingGames.maybeWhen(data: (data) => data.isNotEmpty, orElse: () => false);
               widgets = [
                 if (!widget.editModeEnabled) ...[const _HomeCustomizationTip()],
                 if (showOutage) const ServerOutageDisplay(),
@@ -308,9 +293,7 @@ class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
                 _EditableWidget(
                   widget: HomeEditableWidget.ongoingGames,
                   shouldShow: hasOngoingGames,
-                  child: hasServerContent
-                      ? _OngoingGamesCarousel(ongoingGames, maxGamesToShow: 20)
-                      : _OfflineCorrespondenceCarousel(offlineCorresGames, maxGamesToShow: 20),
+                  child: _OngoingGamesCarousel(ongoingGames, maxGamesToShow: 20),
                 ),
                 _EditableWidget(
                   widget: HomeEditableWidget.recentGames,
@@ -509,11 +492,6 @@ class const _EditableWidget({
               Expanded(
                 child: IgnorePointer(ignoring: isEditing, child: child),
               ),
-              if (widget == HomeEditableWidget.quickPairing)
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () => showTimeControlPicker(context, ref),
-                ),
             ],
           )
         : widget.alwaysEnabled || isEnabled
@@ -636,12 +614,7 @@ class const _OngoingGamesCarousel(
             Navigator.of(context).pushHidingTabBar(
               GameScreen.buildRoute(
                 source: ExistingGameSource(game.fullId),
-                loadingPosition: (
-                  variant: game.variant,
-                  fen: game.fen,
-                  orientation: game.orientation,
-                  lastMove: game.lastMove,
-                ),
+                loadingPosition: game.position,
               ),
             );
           },
@@ -652,51 +625,6 @@ class const _OngoingGamesCarousel(
       case _:
         return const SizedBox.shrink();
     }
-  }
-}
-
-class const _OfflineCorrespondenceCarousel(
-  final AsyncValue<IList<(DateTime, OfflineCorrespondenceGame)>> offlineCorresGames, {
-  required final int maxGamesToShow,
-}) extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return offlineCorresGames.maybeWhen(
-      data: (data) {
-        if (data.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        return GamesCarousel(
-          list: data,
-          onTap: (index) {
-            final el = data[index];
-            Navigator.of(context).pushHidingTabBar(
-              OfflineCorrespondenceGameScreen.buildRoute(initialGame: (el.$1, el.$2)),
-            );
-          },
-          builder: (el) => OngoingGameCarouselItem(
-            game: OngoingGame(
-              id: el.$2.id,
-              fullId: el.$2.fullId,
-              orientation: el.$2.orientation,
-              fen: el.$2.lastPosition.fen,
-              perf: el.$2.perf,
-              speed: el.$2.speed,
-              variant: el.$2.variant,
-              opponent: el.$2.opponent!.user,
-              isMyTurn: el.$2.isMyTurn,
-              opponentRating: el.$2.opponent!.rating,
-              opponentAiLevel: el.$2.opponent!.aiLevel,
-              lastMove: el.$2.lastMove,
-              secondsLeft: el.$2.myTimeLeft(el.$1)?.inSeconds,
-            ),
-          ),
-          moreScreenRouteBuilder: (context) => OfflineCorrespondenceGamesScreen.buildRoute(),
-          maxGamesToShow: maxGamesToShow,
-        );
-      },
-      orElse: () => const SizedBox.shrink(),
-    );
   }
 }
 
@@ -725,26 +653,6 @@ class const _OngoingGamesPreview(
       case _:
         return const SizedBox.shrink();
     }
-  }
-}
-
-class const _OfflineCorrespondencePreview(
-  final AsyncValue<IList<(DateTime, OfflineCorrespondenceGame)>> offlineCorresGames, {
-  required final int maxGamesToShow,
-}) extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return offlineCorresGames.maybeWhen(
-      data: (data) {
-        return PreviewGameList(
-          list: data,
-          maxGamesToShow: maxGamesToShow,
-          builder: (el) => OfflineCorrespondenceGamePreview(game: el.$2, lastModified: el.$1),
-          moreScreenRouteBuilder: (context) => OfflineCorrespondenceGamesScreen.buildRoute(),
-        );
-      },
-      orElse: () => const SizedBox.shrink(),
-    );
   }
 }
 

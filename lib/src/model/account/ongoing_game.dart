@@ -75,7 +75,8 @@ OngoingGame _ongoingGameFromPick(RequiredPick pick) {
     speed: pick('speed').asSpeedOrThrow(),
     opponent: pick('opponent').asLightUserOrNull(),
     opponentRating: pick('opponent', 'rating').asIntOrNull(),
-    opponentAiLevel: pick('opponent', 'ai').asIntOrNull() ?? pick('opponent', 'aiLevel').asIntOrNull(),
+    opponentAiLevel:
+        pick('opponent', 'ai').asIntOrNull() ?? pick('opponent', 'aiLevel').asIntOrNull(),
     secondsLeft: pick('secondsLeft').asIntOrNull(),
     isMyTurn: pick('isMyTurn').asBoolOrThrow(),
   );

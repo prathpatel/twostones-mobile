@@ -45,7 +45,9 @@ sealed class const Player._() with _$Player {
   String displayName(AppLocalizations l10n) =>
       user?.name ??
       name ??
-      (aiLevel != null ? l10n.aiNameLevelAiLevel(aiEngine ?? 'KataGo', aiLevel.toString()) : l10n.anonymous);
+      (aiLevel != null
+          ? l10n.aiNameLevelAiLevel(aiEngine ?? 'KataGo', aiLevel.toString())
+          : l10n.anonymous);
 
   Player setOnGame(bool onGame) {
     final isOnGame = onGame || isAI;

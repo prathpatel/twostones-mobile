@@ -1,12 +1,12 @@
 import 'package:collection/collection.dart';
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/account/home_preferences.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
+import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
@@ -16,7 +16,7 @@ import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/view/play/play_bottom_sheet.dart';
 import 'package:lichess_mobile/src/view/play/playban.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
-import 'package:lichess_mobile/src/widgets/platform_alert_dialog.dart';
+import 'package:lichess_mobile/src/widgets/platform_segmented_control.dart';
 import 'package:material_ui/material_ui.dart';
 
 const _kMatrixSpacing = 8.0;
@@ -35,25 +35,23 @@ class const QuickGameMatrix({super.key}) extends ConsumerWidget {
       return PlaybanMessage(playban: playban);
     }
 
-    final homePrefs = ref.watch(homePreferencesProvider);
-    final enabledControls = TimeIncrement.matrixPresets
-        .where((tc) => !homePrefs.disabledTimeControls.contains(tc))
-        .toList();
-    final showCustom = homePrefs.customButtonEnabled;
-
-    final rows = <List<TimeIncrement>>[];
-    for (var i = 0; i < enabledControls.length; i += 3) {
-      rows.add(enabledControls.sublist(i, (i + 3).clamp(0, enabledControls.length)));
-    }
-    if (rows.isEmpty && showCustom) {
-      rows.add([]);
-    }
+    final boardSize = ref.watch(gameSetupPreferencesProvider.select((prefs) => prefs.boardSize));
+    final choices = TimeIncrement.quickPairings[boardSize] ?? TimeIncrement.quickPairings[19]!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(context.l10n.quickPairing, style: Styles.sectionTitle),
         const SizedBox(height: 6.0),
+        SizedBox(
+          width: double.infinity,
+          child: PlatformSegmentedControl<int>(
+            segments: [for (final size in kGoBoardSizes) (size, '$size×$size')],
+            selected: boardSize,
+            onChanged: (size) => ref.read(gameSetupPreferencesProvider.notifier).setBoardSize(size),
+          ),
+        ),
+        const SizedBox(height: _kMatrixSpacing),
         Container(
           decoration: scaffoldOpacity != 0
               ? BoxDecoration(
@@ -66,17 +64,9 @@ class const QuickGameMatrix({super.key}) extends ConsumerWidget {
               : null,
           child: Column(
             children: [
-              for (final (index, row) in rows.indexed) ...[
-                if (index > 0) const SizedBox(height: _kMatrixSpacing),
-                _SectionChoices(
-                  choices: row,
-                  showCustom: showCustom && index == rows.length - 1 && row.length < 3,
-                ),
-              ],
-              if (showCustom && rows.every((r) => r.length >= 3)) ...[
-                const SizedBox(height: _kMatrixSpacing),
-                const _SectionChoices(choices: [], showCustom: true),
-              ],
+              _SectionChoices(choices: choices, boardSize: boardSize),
+              const SizedBox(height: _kMatrixSpacing),
+              _SectionChoices(choices: const [], boardSize: boardSize, showCustom: true),
             ],
           ),
         ),
@@ -87,6 +77,7 @@ class const QuickGameMatrix({super.key}) extends ConsumerWidget {
 
 class const _SectionChoices({
   required final List<TimeIncrement> choices,
+  required final int boardSize,
   final bool showCustom = false,
 }) extends ConsumerWidget {
   @override
@@ -112,7 +103,9 @@ class const _SectionChoices({
                     ? () {
                         Navigator.of(context).pushHidingTabBar(
                           GameScreen.buildRoute(
-                            source: LobbySource(GameSeek.fastPairing(choice, authUser)),
+                            source: LobbySource(
+                              GameSeek.fastPairing(choice, authUser, boardSize: boardSize),
+                            ),
                           ),
                         );
                       }
@@ -199,99 +192,4 @@ class const _ChoiceChip({
       ),
     );
   }
-}
-
-Future<void> showTimeControlPicker(BuildContext context, WidgetRef ref) {
-  final homePrefs = ref.read(homePreferencesProvider);
-  final disabledControls = Set<TimeIncrement>.from(homePrefs.disabledTimeControls);
-  var customEnabled = homePrefs.customButtonEnabled;
-
-  final grouped = groupBy(TimeIncrement.matrixPresets, (tc) => tc.speed);
-
-  return showAdaptiveDialog<void>(
-    context: context,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final enabledCount =
-              TimeIncrement.matrixPresets.length -
-              disabledControls.length +
-              (customEnabled ? 1 : 0);
-
-          return PlatformAlertDialog(
-            title: Text(context.l10n.quickPairing),
-            contentPadding: const EdgeInsets.only(top: 12),
-            scrollable: true,
-            content: Material(
-              type: MaterialType.transparency,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final speed in grouped.keys) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16.0, top: 8.0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          speed.label(context.l10n),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.0),
-                        ),
-                      ),
-                    ),
-                    for (final tc in grouped[speed]!)
-                      CheckboxListTile.adaptive(
-                        title: Text(tc.display),
-                        value: !disabledControls.contains(tc),
-                        onChanged: !disabledControls.contains(tc) && enabledCount <= 1
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  if (value!) {
-                                    disabledControls.remove(tc);
-                                  } else {
-                                    disabledControls.add(tc);
-                                  }
-                                });
-                              },
-                      ),
-                  ],
-                  const Divider(),
-                  CheckboxListTile.adaptive(
-                    title: Text(context.l10n.custom),
-                    value: customEnabled,
-                    onChanged: customEnabled && enabledCount <= 1
-                        ? null
-                        : (value) {
-                            setState(() {
-                              customEnabled = value!;
-                            });
-                          },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              PlatformDialogAction(
-                onPressed: () => Navigator.of(context).pop(),
-                child: Text(context.l10n.cancel),
-              ),
-              PlatformDialogAction(
-                cupertinoIsDefaultAction: true,
-                onPressed: () {
-                  ref
-                      .read(homePreferencesProvider.notifier)
-                      .setTimeControlConfig(
-                        disabledTimeControls: IList(disabledControls),
-                        customButtonEnabled: customEnabled,
-                      );
-                  Navigator.of(context).pop();
-                },
-                child: Text(context.l10n.mobileOkButton),
-              ),
-            ],
-          );
-        },
-      );
-    },
-  );
 }

@@ -6,7 +6,6 @@ import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/account/rating_pref_aware.dart';
-import 'package:lichess_mobile/src/view/user/perf_stats_screen.dart';
 import 'package:lichess_mobile/src/widgets/rating.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -21,38 +20,17 @@ class const PerfCards({
 
   @override
   Widget build(BuildContext context) {
-    const puzzlePerfsSet = {Perf.puzzle, Perf.streak, Perf.storm};
-    final List<Perf> gamePerfs = Perf.values
+    final List<Perf> userPerfs = Perf.values
         .where((element) {
-          if (puzzlePerfsSet.contains(element)) {
-            return false;
-          }
           final p = user.perfs[element];
           return p != null && p.numberOfGamesOrRuns > 0 && p.ratingDeviation < kClueLessDeviation;
         })
         .toList(growable: false);
 
-    gamePerfs.sort(
+    userPerfs.sort(
       (p1, p2) =>
           user.perfs[p2]!.numberOfGamesOrRuns.compareTo(user.perfs[p1]!.numberOfGamesOrRuns),
     );
-
-    final List<Perf> puzzlePerfs = Perf.values
-        .where((element) {
-          if (!puzzlePerfsSet.contains(element)) {
-            return false;
-          }
-          final p = user.perfs[element];
-          return p != null && p.numberOfGamesOrRuns > 0;
-        })
-        .toList(growable: false);
-
-    puzzlePerfs.sort(
-      (p1, p2) =>
-          user.perfs[p2]!.numberOfGamesOrRuns.compareTo(user.perfs[p1]!.numberOfGamesOrRuns),
-    );
-
-    final userPerfs = [...gamePerfs, ...puzzlePerfs];
 
     if (userPerfs.isEmpty) {
       return const SizedBox.shrink();
@@ -83,15 +61,12 @@ class const PerfCards({
                 // when the theme changes.
                 final perf = userPerfs[index];
                 final userPerf = user.perfs[perf]!;
-                final bool isPerfWithoutStats = Perf.streak == perf;
                 return SizedBox(
                   height: 100,
                   width: 100,
                   child: Card(
                     shape: const RoundedRectangleBorder(borderRadius: _kCardBorderRadius),
-                    child: InkWell(
-                      borderRadius: _kCardBorderRadius,
-                      onTap: isPerfWithoutStats ? null : () => _handlePerfCardTap(context, perf),
+                    child: SizedBox(
                       child: Padding(
                         padding: const EdgeInsets.all(6.0),
                         child: Column(
@@ -154,9 +129,5 @@ class const PerfCards({
         ),
       ),
     );
-  }
-
-  void _handlePerfCardTap(BuildContext context, Perf perf) {
-    Navigator.of(context).push(PerfStatsScreen.buildRoute(user: user, perf: perf));
   }
 }

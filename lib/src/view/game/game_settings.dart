@@ -1,6 +1,5 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/game_controller.dart';
 import 'package:lichess_mobile/src/model/game/game_preferences.dart';
@@ -38,12 +37,12 @@ class const GameSettings({required final GameFullId id, super.key}) extends Cons
               data: (data) {
                 return [
                   SwitchSettingTile(
-                      title: Text(context.l10n.preferencesMoveConfirmation),
-                      value: data.shouldConfirmMove,
-                      onChanged: (value) {
-                        ref.read(gameControllerProvider(id).notifier).toggleMoveConfirmation();
-                      },
-                    ),
+                    title: Text(context.l10n.preferencesMoveConfirmation),
+                    value: data.shouldConfirmMove,
+                    onChanged: (value) {
+                      ref.read(gameControllerProvider(id).notifier).toggleMoveConfirmation();
+                    },
+                  ),
                   SwitchSettingTile(
                     title: Text(context.l10n.preferencesZenMode),
                     value: data.isZenModeEnabled,

@@ -26,7 +26,9 @@ typedef ClockData = ({Duration initial, Duration increment});
 ///
 /// See [PlayableGame] for a game owned by the current user and that can be played unless finished.
 @Freezed(fromJson: true, toJson: true)
-sealed class const ExportedGame._() with BaseGame, _$ExportedGame, ServerGame implements ServerGame {
+sealed class const ExportedGame._()
+    with BaseGame, _$ExportedGame, ServerGame
+    implements ServerGame {
   @Assert('steps.isNotEmpty')
   factory({
     required GameId id,

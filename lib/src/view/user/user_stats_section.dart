@@ -110,9 +110,7 @@ class const _RatingHistoryCard({required final User user}) extends ConsumerWidge
     final history = asyncHistory.value;
     if (history == null) {
       // A skeleton of the chart while it loads, if the user has a perf it may draw.
-      final mayHaveChart = Perf.values.any(
-        (perf) => perf != .storm && perf != .streak && isRated(perf),
-      );
+      final mayHaveChart = Perf.values.any(isRated);
       return asyncHistory.isLoading && mayHaveChart
           ? const Padding(
               padding: EdgeInsets.only(bottom: 12.0),
@@ -155,13 +153,11 @@ class const _RatingHistoryCard({required final User user}) extends ConsumerWidge
     // The most played game perfs, then puzzles if there is room left.
     final chartPerfs = [
       ...Perf.values
-          .where((perf) => perf != .puzzle && perf != .storm && perf != .streak)
           .where(hasChartableHistory)
           .sortedByCompare(
             (perf) => user.perfs[perf]!.numberOfGamesOrRuns,
             (a, b) => b.compareTo(a),
           ),
-      if (hasChartableHistory(.puzzle)) Perf.puzzle,
     ];
     if (chartPerfs.isEmpty) return const SizedBox.shrink();
 

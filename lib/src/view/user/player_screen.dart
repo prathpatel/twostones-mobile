@@ -8,7 +8,6 @@ import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/view/account/rating_pref_aware.dart';
 import 'package:lichess_mobile/src/view/relation/friend_screen.dart';
 import 'package:lichess_mobile/src/view/user/leaderboard_widget.dart';
-import 'package:lichess_mobile/src/view/user/online_bots_screen.dart';
 import 'package:lichess_mobile/src/view/user/search_screen.dart';
 import 'package:lichess_mobile/src/view/user/user_or_profile_screen.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
@@ -59,13 +58,11 @@ class const _Body() extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authUser = ref.watch(authControllerProvider);
     final onlineFriends = ref.watch(onlineFriendsProvider);
-    final onlineBots = ref.watch(onlineBotsProvider);
     final top1 = ref.watch(top1Provider);
 
     return ListView(
       children: [
         if (authUser != null) OnlineFriendsWidget(onlineFriends: onlineFriends),
-        OnlineBotsWidget(onlineBots: onlineBots),
         RatingPrefAware(child: LeaderboardWidget(top1: top1)),
       ],
     );

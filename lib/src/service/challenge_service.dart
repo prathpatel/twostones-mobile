@@ -231,11 +231,11 @@ class ChallengeService(final Ref ref) {
           : null,
       actions: [
         BottomSheetAction(
-            makeLabel: (context) => Text(context.l10n.accept),
-            leading: Icon(Icons.check, color: context.lichessColors.green),
-            isDefaultAction: true,
-            onPressed: () async => await acceptChallenge(challenge.id),
-          ),
+          makeLabel: (context) => Text(context.l10n.accept),
+          leading: Icon(Icons.check, color: context.lichessColors.green),
+          isDefaultAction: true,
+          onPressed: () async => await acceptChallenge(challenge.id),
+        ),
         if (fromLink && Theme.of(context).platform != TargetPlatform.iOS)
           BottomSheetAction(
             makeLabel: (context) => Text(context.l10n.cancel),

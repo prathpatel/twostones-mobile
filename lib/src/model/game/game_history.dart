@@ -12,7 +12,6 @@ import 'package:lichess_mobile/src/model/game/game_filter.dart';
 import 'package:lichess_mobile/src/model/game/game_repository.dart';
 import 'package:lichess_mobile/src/model/game/game_storage.dart';
 import 'package:lichess_mobile/src/model/go/go.dart';
-import 'package:lichess_mobile/src/model/user/game_history_preferences.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/model/user/user_repository_providers.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
@@ -125,7 +124,6 @@ class UserGameHistoryNotifier(final UserGameHistoryNotifierParams params)
 
   Future<UserGameHistoryState> _fetchFirstPage() async {
     final authUser = ref.watch(authControllerProvider);
-    final prefs = ref.watch(gameHistoryPreferencesProvider);
     final online = await ref.watch(
       connectivityChangesProvider.selectAsync((status) => status.isOnline),
     );
@@ -133,11 +131,7 @@ class UserGameHistoryNotifier(final UserGameHistoryNotifierParams params)
 
     final id = params.userId ?? authUser?.user.id;
     final recentGames = id != null && online
-        ? _gameRepository.getUserGames(
-            id,
-            filter: params.filter,
-            withBookmarked: true,
-          )
+        ? _gameRepository.getUserGames(id, filter: params.filter, withBookmarked: true)
         : storage
               .page(userId: id, filter: params.filter)
               .then(
@@ -165,7 +159,6 @@ class UserGameHistoryNotifier(final UserGameHistoryNotifierParams params)
   Future<void> getNext() async {
     if (!state.hasValue) return;
 
-    final prefs = ref.read(gameHistoryPreferencesProvider);
     final currentVal = state.requireValue;
     state = AsyncData(currentVal.copyWith(isLoading: true));
     try {

@@ -74,9 +74,7 @@ class _ChallengesBodyState() extends ConsumerState<CorrespondenceChallengesScree
   Widget build(BuildContext context) {
     final challengesAsync = ref.watch(correspondenceSeeksProvider);
     final authUser = ref.watch(authControllerProvider);
-    final supportedSeeks = challengesAsync.value
-        ?.where((seek) => seek.variant.isPlaySupported)
-        .toList();
+    final supportedSeeks = challengesAsync.value?.toList();
 
     return PlatformScaffold(
       appBar: PlatformAppBar(title: Text(context.l10n.correspondence)),

@@ -526,9 +526,7 @@ class const LoadGameError(final String errorMessage, {final bool showBottomBar =
     return Column(
       children: [
         Expanded(
-          child: SafeArea(
-            child: GameLayout.empty(errorMessage: errorMessage),
-          ),
+          child: SafeArea(child: GameLayout.empty(errorMessage: errorMessage)),
         ),
         BottomBar(
           cupertinoGlass: true,

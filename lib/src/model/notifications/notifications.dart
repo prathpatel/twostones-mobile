@@ -733,12 +733,12 @@ class const ChallengeNotification(final Challenge challenge) extends LocalNotifi
       autoCancel: false,
       actions: <AndroidNotificationAction>[
         AndroidNotificationAction(
-            'accept',
-            l10n.accept,
-            icon: const DrawableResourceAndroidBitmap('tick'),
-            showsUserInterface: true,
-            contextual: true,
-          ),
+          'accept',
+          l10n.accept,
+          icon: const DrawableResourceAndroidBitmap('tick'),
+          showsUserInterface: true,
+          contextual: true,
+        ),
         AndroidNotificationAction(
           'decline',
           l10n.decline,

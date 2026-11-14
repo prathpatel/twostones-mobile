@@ -63,19 +63,13 @@ class TimeIncrement implements Comparable<TimeIncrement> {
     return estimatedDuration.compareTo(other.estimatedDuration);
   }
 
-  static const matrixPresets = [
-    TimeIncrement(60, 0),
-    TimeIncrement(120, 1),
-    TimeIncrement(180, 0),
-    TimeIncrement(180, 2),
-    TimeIncrement(300, 0),
-    TimeIncrement(300, 3),
-    TimeIncrement(600, 0),
-    TimeIncrement(600, 5),
-    TimeIncrement(900, 10),
-    TimeIncrement(1800, 0),
-    TimeIncrement(1800, 20),
-  ];
+  /// The quick pairing clocks of the server for each board size: three per size, with more time on
+  /// the bigger boards, where a game has more moves.
+  static const quickPairings = <int, List<TimeIncrement>>{
+    9: [TimeIncrement(60, 5), TimeIncrement(180, 5), TimeIncrement(300, 10)],
+    13: [TimeIncrement(300, 10), TimeIncrement(600, 10), TimeIncrement(900, 15)],
+    19: [TimeIncrement(600, 15), TimeIncrement(1200, 20), TimeIncrement(1800, 30)],
+  };
 
   static const presets = [
     TimeIncrement(0, 1),

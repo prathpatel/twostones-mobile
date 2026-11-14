@@ -23,6 +23,7 @@ import 'package:lichess_mobile/src/model/game/game_storage.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
 import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/go/pick.dart';
+import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/network/socket.dart';
 import 'package:lichess_mobile/src/service/account_service.dart';
 import 'package:lichess_mobile/src/service/move_feedback.dart';
@@ -40,30 +41,17 @@ final gameControllerProvider = AsyncNotifierProvider.autoDispose
       name: 'GameControllerProvider',
     );
 
-/// Returns the [PlayableGame] with the local account preferences applied where the server did not
-/// send them.
-PlayableGame _withLocalAccountPrefsFallback(PlayableGame game, AccountPrefState prefs) {
-  final serverPrefs = game.prefs;
+/// Returns the [PlayableGame] with the preferences of this device: whether ratings are shown, and
+/// whether a stone and a resignation must be confirmed.
+PlayableGame _withLocalPrefs(PlayableGame game, AccountPrefState prefs, BoardPrefs boardPrefs) {
   return game.copyWith(
     prefs: ServerGamePrefs(
       showRatings: prefs.showRatings == ShowRatings.yes,
-      confirmResign: serverPrefs?.confirmResign ?? prefs.confirmResign.value,
-      submitMove:
-          (serverPrefs?.submitMove ?? false) ||
-          _submitMoveEnabledForSpeed(prefs.submitMove, game.meta.speed),
+      confirmResign: boardPrefs.confirmResign,
+      submitMove: boardPrefs.confirmMove,
       zenMode: prefs.zenMode,
     ),
   );
-}
-
-bool _submitMoveEnabledForSpeed(SubmitMove submitMove, Speed speed) {
-  return switch (speed) {
-    Speed.correspondence => submitMove.choices.contains(SubmitMoveChoice.correspondence),
-    Speed.classical => submitMove.choices.contains(SubmitMoveChoice.classical),
-    Speed.rapid => submitMove.choices.contains(SubmitMoveChoice.rapid),
-    Speed.blitz => submitMove.choices.contains(SubmitMoveChoice.blitz),
-    Speed.ultraBullet || Speed.bullet => false,
-  };
 }
 
 /// Plays and follows a game of Go on the server, over the game socket.
@@ -156,9 +144,10 @@ class GameController(final GameFullId gameFullId)
     final fullEvent = GameFullEvent.fromJson(rawFullEvent.data as Map<String, dynamic>);
     _socketClient.version = fullEvent.socketEventVersion;
 
-    final game = _withLocalAccountPrefsFallback(
+    final game = _withLocalPrefs(
       fullEvent.game,
       await ref.read(accountPreferencesProvider.future),
+      ref.read(boardPreferencesProvider),
     );
 
     // Play "dong" sound when this is a new game and we're playing it (not spectating)
@@ -571,9 +560,7 @@ class GameController(final GameFullId gameFullId)
   /// Sound of a stone when going through the moves of the game.
   void _replayFeedback(GoPosition position) {
     if (position.lastMove == null) return;
-    ref
-        .read(soundServiceProvider)
-        .play(position.captured.isNotEmpty ? Sound.capture : Sound.move);
+    ref.read(soundServiceProvider).play(position.captured.isNotEmpty ? Sound.capture : Sound.move);
   }
 
   /// Reload game
@@ -614,9 +601,10 @@ class GameController(final GameFullId gameFullId)
 
         final curState = state.requireValue;
 
-        final newGame = _withLocalAccountPrefsFallback(
+        final newGame = _withLocalPrefs(
           fullEvent.game,
           ref.read(accountPreferencesProvider).value ?? defaultAccountPreferences,
+          ref.read(boardPreferencesProvider),
         );
         final isOpponentOnGame =
             newGame.playerOf(newGame.youAre?.opposite ?? Side.white).onGame ?? false;
@@ -883,7 +871,10 @@ class GameController(final GameFullId gameFullId)
       if (newState.game.clock != null) {
         // we don't rely on these values to display the clock, but let's keep
         // the game object in sync
-        newState = newState.copyWith.game.clock!(white: data.clock!.white, black: data.clock!.black);
+        newState = newState.copyWith.game.clock!(
+          white: data.clock!.white,
+          black: data.clock!.black,
+        );
       } else if (newState.game.correspondenceClock != null) {
         newState = newState.copyWith.game.correspondenceClock!(
           white: data.clock!.white,
@@ -1062,8 +1053,7 @@ sealed class const GameState._() with _$GameState, ChatMixinState {
   bool get canGoBackward => stepCursor > 0;
 
   /// Whether the player may pass now.
-  bool get canPass =>
-      game.youAre != null && game.playable && game.isMyTurn && !game.inScoringPhase;
+  bool get canPass => game.youAre != null && game.playable && game.isMyTurn && !game.inScoringPhase;
 
   bool get canGetNewOpponent =>
       !game.playable &&

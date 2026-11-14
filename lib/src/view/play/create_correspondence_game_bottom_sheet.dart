@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
 import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart';
 import 'package:lichess_mobile/src/service/create_game_service.dart';
@@ -15,7 +15,6 @@ import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
 import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
 import 'package:lichess_mobile/src/widgets/expanded_section.dart';
 import 'package:lichess_mobile/src/widgets/non_linear_slider.dart';
-import 'package:lichess_mobile/src/widgets/variant_app_bar_title.dart';
 import 'package:material_ui/material_ui.dart';
 
 class const CreateCorrespondenceGameBottomSheet({super.key}) extends ConsumerStatefulWidget {
@@ -80,20 +79,20 @@ class _CreateGameBodyState() extends ConsumerState<CreateCorrespondenceGameBotto
               },
             ),
             ListTile(
-              title: Text(context.l10n.variant),
+              title: const Text('Board size'),
               trailing: TextButton(
                 onPressed: () {
                   showChoicePicker(
                     context,
-                    choices: playSupportedVariants.where((v) => v != Variant.fromPosition).toList(),
-                    selectedItem: preferences.customVariant,
-                    labelBuilder: (variant) => VariantLabel(variant),
-                    onSelectedItemChanged: (Variant variant) {
-                      ref.read(gameSetupPreferencesProvider.notifier).setCustomVariant(variant);
+                    choices: kGoBoardSizes,
+                    selectedItem: preferences.boardSize,
+                    labelBuilder: (size) => Text('$size×$size'),
+                    onSelectedItemChanged: (int size) {
+                      ref.read(gameSetupPreferencesProvider.notifier).setBoardSize(size);
                     },
                   );
                 },
-                child: Text(preferences.customVariant.label(context.l10n)),
+                child: Text('${preferences.boardSize}×${preferences.boardSize}'),
               ),
             ),
             ExpandedSection(
@@ -110,12 +109,10 @@ class _CreateGameBodyState() extends ConsumerState<CreateCorrespondenceGameBotto
               ListTile(
                 title: Text(context.l10n.rated),
                 trailing: Switch.adaptive(
-                  value: preferences.customVariant == Variant.standard && preferences.customRated,
-                  onChanged: preferences.customVariant == Variant.standard
-                      ? (bool value) {
-                          ref.read(gameSetupPreferencesProvider.notifier).setCustomRated(value);
-                        }
-                      : null,
+                  value: preferences.customRated,
+                  onChanged: (bool value) {
+                    ref.read(gameSetupPreferencesProvider.notifier).setCustomRated(value);
+                  },
                 ),
               ),
             if (userPerf != null)

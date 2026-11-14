@@ -19,7 +19,7 @@ import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/utils/string.dart';
 import 'package:lichess_mobile/src/view/account/game_bookmarks_screen.dart';
-import 'package:lichess_mobile/src/view/game/game_list_detail_tile.dart';
+
 import 'package:lichess_mobile/src/view/game/game_list_tile.dart';
 import 'package:lichess_mobile/src/view/game/game_review_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
@@ -325,21 +325,13 @@ class _BodyState() extends ConsumerState<_Body> {
                     SwipeAction(
                       backgroundColor: ColorScheme.of(context).tertiaryContainer,
                       foregroundColor: ColorScheme.of(context).onTertiaryContainer,
-                      onPressed: game.variant.isReadSupported
-                          ? () {
-                              Navigator.of(context).pushHidingTabBar(
-                                GameReviewScreen.buildRoute(orientation: pov, gameId: game.id),
-                              );
-                            }
-                          : () {
-                              showSnackBar(
-                                context,
-                                'This variant is not supported yet.',
-                                type: SnackBarType.info,
-                              );
-                            },
-                      icon: Icons.biotech,
-                      label: context.l10n.analysis,
+                      onPressed: () {
+                        Navigator.of(context).pushHidingTabBar(
+                          GameReviewScreen.buildRoute(orientation: pov, gameId: game.id),
+                        );
+                      },
+                      icon: Icons.history,
+                      label: 'Review',
                     ),
                   ],
                   endActions: [
@@ -361,7 +353,8 @@ class _BodyState() extends ConsumerState<_Body> {
                         onPressed: () {
                           final request = ChallengeRequest(
                             destUser: opponent.user,
-                            variant: game.variant,
+                            boardSize: game.boardSize,
+                            handicap: game.handicap,
                             rated: game.rated,
                             sideChoice: pov == Side.white ? SideChoice.black : SideChoice.white,
                             timeControl: game.clock != null
@@ -436,14 +429,6 @@ class _FilterGamesState() extends ConsumerState<_FilterGames> {
     Perf.rapid,
     Perf.classical,
     Perf.correspondence,
-    Perf.chess960,
-    Perf.antichess,
-    Perf.kingOfTheHill,
-    Perf.threeCheck,
-    Perf.atomic,
-    Perf.horde,
-    Perf.racingKings,
-    Perf.crazyhouse,
   ];
   static const filterGroupSpace = SizedBox(height: 12.0);
 

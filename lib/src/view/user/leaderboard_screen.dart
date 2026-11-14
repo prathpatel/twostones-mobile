@@ -44,14 +44,6 @@ class const _Body() extends ConsumerWidget {
           _Leaderboard(data.rapid, Perf.rapid),
           _Leaderboard(data.classical, Perf.classical),
           _Leaderboard(data.ultrabullet, Perf.ultraBullet),
-          _Leaderboard(data.crazyhouse, Perf.crazyhouse),
-          _Leaderboard(data.chess960, Perf.chess960),
-          _Leaderboard(data.kingOfThehill, Perf.kingOfTheHill),
-          _Leaderboard(data.threeCheck, Perf.threeCheck),
-          _Leaderboard(data.atomic, Perf.atomic),
-          _Leaderboard(data.horde, Perf.horde),
-          _Leaderboard(data.antichess, Perf.antichess),
-          _Leaderboard(data.racingKings, Perf.racingKings),
         ];
 
         return SingleChildScrollView(

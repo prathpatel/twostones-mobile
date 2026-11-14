@@ -1,14 +1,10 @@
 import 'dart:math';
 
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/game/game_bookmarks.dart';
 import 'package:lichess_mobile/src/model/game/game_history.dart';
-import 'package:lichess_mobile/src/model/user/user.dart';
-import 'package:lichess_mobile/src/model/user/user_repository.dart';
 import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
@@ -22,7 +18,6 @@ import 'package:lichess_mobile/src/view/game/game_list_tile.dart';
 import 'package:lichess_mobile/src/view/settings/account_preferences_screen.dart';
 import 'package:lichess_mobile/src/view/user/perf_cards.dart';
 import 'package:lichess_mobile/src/view/user/recent_games.dart';
-import 'package:lichess_mobile/src/view/user/user_activity.dart';
 import 'package:lichess_mobile/src/view/user/user_profile.dart';
 import 'package:lichess_mobile/src/view/user/user_stats_section.dart';
 import 'package:lichess_mobile/src/widgets/buttons.dart';
@@ -48,12 +43,6 @@ class const ProfileScreen({super.key}) extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-final _accountActivityProvider = FutureProvider.autoDispose<IList<UserActivity>>((ref) {
-  final authUser = ref.watch(authControllerProvider);
-  if (authUser == null) return IList();
-  return ref.read(userRepositoryProvider).getActivity(authUser.user.id);
-}, name: 'userActivityProvider');
-
 class _ProfileScreenState() extends ConsumerState<ProfileScreen> {
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
 
@@ -65,7 +54,6 @@ class _ProfileScreenState() extends ConsumerState<ProfileScreen> {
       onFocusGained: () {
         if (!context.mounted) return;
         ref.invalidate(accountProvider);
-        ref.invalidate(_accountActivityProvider);
         ref.invalidate(myRecentGamesProvider);
         ref.invalidate(gameBookmarksPaginatorProvider);
       },
@@ -121,7 +109,6 @@ class _ProfileScreenState() extends ConsumerState<ProfileScreen> {
             if (user == null) {
               return Center(child: Text(context.l10n.mobileMustBeLoggedIn));
             }
-            final activity = ref.watch(_accountActivityProvider);
             final recentGames = ref.watch(myRecentGamesProvider);
             final nbOfGames = ref.watch(userNumberOfGamesProvider(null)).value ?? 0;
             final nbBookmarks = user.count?.bookmark ?? 0;
@@ -130,7 +117,6 @@ class _ProfileScreenState() extends ConsumerState<ProfileScreen> {
               key: _refreshIndicatorKey,
               onRefresh: () => Future.wait([
                 ref.refresh(accountProvider.future),
-                ref.refresh(_accountActivityProvider.future),
                 ref.refresh(myRecentGamesProvider.future),
                 if (nbBookmarks > 0) ref.refresh(gameBookmarksPaginatorProvider.future),
               ]),
@@ -139,7 +125,6 @@ class _ProfileScreenState() extends ConsumerState<ProfileScreen> {
                   UserProfileWidget(user: user),
                   const AccountPerfCards(),
                   UserStatsSection(user: user, isMe: true),
-                  UserActivityWidget(activity: activity, user: user.lightUser),
                   switch (bookmarks) {
                     AsyncData(value: final state) when state.gameList.isNotEmpty => ListSection(
                       header: Text(context.l10n.nbBookmarks(nbBookmarks)),

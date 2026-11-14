@@ -40,11 +40,7 @@ class const GamePlayer({
 
   /// When the opponent has left the game, used to display the claim-win countdown
   /// and, once the opponent has been gone long enough, the claim choices.
-  final ({
-    (Duration, DateTime) countdown,
-    bool canClaim,
-    VoidCallback onClaimWin,
-  })?
+  final ({(Duration, DateTime) countdown, bool canClaim, VoidCallback onClaimWin})?
   opponentLeftCallbacks,
 
   /// Time left for the player to move at the start of the game.

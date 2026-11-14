@@ -28,7 +28,9 @@ part 'playable_game.freezed.dart';
 /// See also:
 /// - [ExportedGame] for a game that is finished and not owned by the current user.
 @freezed
-sealed class const PlayableGame._() with BaseGame, _$PlayableGame, ServerGame implements ServerGame {
+sealed class const PlayableGame._()
+    with BaseGame, _$PlayableGame, ServerGame
+    implements ServerGame {
   @Assert('steps.isNotEmpty')
   factory({
     required GameId id,
@@ -207,9 +209,10 @@ PlayableGame _playableGameFromPick(RequiredPick pick) {
   return PlayableGame(
     id: game('id').asGameIdOrThrow(),
     meta: meta,
-    source: game('source').letOrNull(
-          (pick) => GameSource.nameMap[pick.asStringOrThrow()] ?? GameSource.unknown,
-        ) ??
+    source:
+        game(
+          'source',
+        ).letOrNull((pick) => GameSource.nameMap[pick.asStringOrThrow()] ?? GameSource.unknown) ??
         GameSource.unknown,
     steps: steps,
     white: playerSide == Side.white ? player : opponent,
@@ -247,7 +250,9 @@ GameMeta _playableGameMetaFromPick(RequiredPick pick) {
         DateTime.fromMillisecondsSinceEpoch(0),
     rated: pick('game', 'rated').asBoolOrThrow(),
     speed: pick('game', 'speed').asSpeedOrThrow(),
-    perf: pick('game', 'perf').asPerfOrNull() ?? Perf.fromSpeed(pick('game', 'speed').asSpeedOrThrow()),
+    perf:
+        pick('game', 'perf').asPerfOrNull() ??
+        Perf.fromSpeed(pick('game', 'speed').asSpeedOrThrow()),
     boardSize: pick('game', 'go', 'size').asIntOrThrow(),
     komi: pick('game', 'go', 'komi').asDoubleOrNull() ?? defaultKomi(handicap: handicap),
     handicap: handicap,

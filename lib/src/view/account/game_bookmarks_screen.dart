@@ -130,19 +130,11 @@ class _BodyState() extends ConsumerState<_Body> {
                         SwipeAction(
                           backgroundColor: ColorScheme.of(context).tertiaryContainer,
                           foregroundColor: ColorScheme.of(context).onTertiaryContainer,
-                          onPressed: game.variant.isReadSupported
-                              ? () {
-                                  Navigator.of(context).pushHidingTabBar(
-                                    GameReviewScreen.buildRoute(orientation: pov, gameId: game.id),
-                                  );
-                                }
-                              : () {
-                                  showSnackBar(
-                                    context,
-                                    'This variant is not supported yet.',
-                                    type: SnackBarType.info,
-                                  );
-                                },
+                          onPressed: () {
+                            Navigator.of(context).pushHidingTabBar(
+                              GameReviewScreen.buildRoute(orientation: pov, gameId: game.id),
+                            );
+                          },
                           icon: Icons.biotech,
                           label: context.l10n.analysis,
                         ),
