@@ -1,0 +1,235 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:lichess_mobile/src/network/socket.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/widgets/glass_toast_host.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:signal_strength_indicator/signal_strength_indicator.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// A icon that shows the lag rating of the current socket connection.
+///
+/// If [socketUri] is provided, it will be used to get the lag rating from that socket route only,
+/// otherwise it will use the default socket route.
+class const SocketPingRatingIcon({final Uri? socketUri, super.key}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ping = ref.watch(socketPingProvider(socketUri));
+
+    // The lag is told by the tooltip, shown on long press.
+    return Tooltip(
+      message: 'PING: ${ping.averageLag.inMilliseconds}ms',
+      child: SizedBox.square(
+        dimension: kMinInteractiveDimension,
+        child: Center(
+          child: LagIndicator(lagRating: ping.rating, isActive: ping.isActive, size: 24.0),
+        ),
+      ),
+    );
+  }
+}
+
+class const SocketPingRatingListTile({final Uri? socketUri, super.key}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ping = ref.watch(socketPingProvider(socketUri));
+
+    return ListTile(
+      leading: LagIndicator(lagRating: ping.rating, isActive: ping.isActive),
+      title: ping.averageLag > Duration.zero
+          ? Text.rich(
+              TextSpan(
+                text: 'PING ',
+                children: [
+                  TextSpan(
+                    text: '${ping.averageLag.inMilliseconds}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: ColorScheme.of(context).onSurface,
+                    ),
+                  ),
+                  const TextSpan(text: ' ms'),
+                ],
+              ),
+              style: TextStyle(color: ColorScheme.of(context).onSurface.withValues(alpha: 0.7)),
+            )
+          : Text(
+              context.l10n.noNetwork,
+              style: TextStyle(color: ColorScheme.of(context).onSurface.withValues(alpha: 0.7)),
+            ),
+      enabled: ping.averageLag > Duration.zero,
+      onTap: () {
+        launchUrl(Uri.parse('https://lichess.org/lag'));
+      },
+    );
+  }
+}
+
+/// An indicator that shows the lag rating of the connection.
+class const LagIndicator({
+  /// The lag rating from 0 to 4.
+  required final int lagRating,
+
+  /// Whether the connection is active (connected or trying to reconnect).
+  ///
+  /// When the lag rating is 0 and the connection is active, a loading animation
+  /// is shown to indicate a reconnection attempt. When inactive, no animation is
+  /// shown.
+  final bool isActive = true,
+
+  /// Visual size of the indicator.
+  final double size = 20.0,
+  super.key,
+}) extends StatelessWidget {
+  this : assert(lagRating >= 0 && lagRating <= 4);
+
+  static const inactiveColor = Color(0x339E9E9E);
+
+  static const materialLevels = {
+    0: inactiveColor,
+    1: Colors.red,
+    2: Colors.yellow,
+    3: Colors.green,
+    4: Colors.green,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        children: [
+          SignalStrengthIndicator.bars(
+            barCount: 4,
+            minValue: 0,
+            maxValue: 4,
+            value: lagRating,
+            size: size,
+            inactiveColor: inactiveColor,
+            levels: materialLevels,
+          ),
+          if (lagRating == 0 && isActive)
+            Center(
+              child: SpinKitThreeBounce(color: Colors.grey, size: size / 2),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A adaptive circular progress indicator which size is constrained so it can fit
+/// in buttons.
+class const ButtonLoadingIndicator({super.key}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 20,
+      width: 20,
+      child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+    );
+  }
+}
+
+/// A centered circular progress indicator
+class const CenterLoadingIndicator({super.key}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: CircularProgressIndicator.adaptive());
+  }
+}
+
+/// A screen with an error message and a retry button.
+///
+/// This widget is intended to be used when a request fails and the user can
+/// retry it.
+class const FullScreenRetryRequest({super.key, required final VoidCallback onRetry})
+    extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(context.l10n.mobileSomethingWentWrong, style: Styles.sectionTitle),
+          const SizedBox(height: 10),
+          FilledButton.tonal(onPressed: onRetry, child: Text(context.l10n.retry)),
+        ],
+      ),
+    );
+  }
+}
+
+enum SnackBarType() {
+  error,
+  info,
+  success,
+}
+
+/// Shows a snackbar with the given message: a Material [SnackBar] on Android, a liquid glass toast
+/// at the top of the screen on iOS.
+void showSnackBar(
+  BuildContext context,
+  String message, {
+  SnackBarType type = SnackBarType.info,
+  Duration? duration,
+}) {
+  SnackBarPresenter.of(context).show(message, type: type, duration: duration);
+}
+
+/// Shows snackbars like [showSnackBar], without a [BuildContext].
+///
+/// Get it before an async gap that may unmount the context (e.g. a closing bottom sheet).
+sealed class SnackBarPresenter {
+  factory of(BuildContext context) {
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      // The root overlay, above the app bars and the tab bar, and kept when the route is popped.
+      // The context of the root navigator itself (as given by services) is above that overlay.
+      return _GlassToastPresenter(
+        Overlay.maybeOf(context, rootOverlay: true) ?? Navigator.of(context).overlay!,
+      );
+    }
+    return _MaterialSnackBarPresenter(ScaffoldMessenger.of(context), ColorScheme.of(context));
+  }
+
+  /// Whether the presenter can still show a snackbar.
+  bool get mounted;
+
+  /// Shows a snackbar with the given message.
+  void show(String message, {SnackBarType type = SnackBarType.info, Duration? duration});
+}
+
+class _MaterialSnackBarPresenter(
+  final ScaffoldMessengerState _messenger,
+  final ColorScheme _colorScheme,
+) implements SnackBarPresenter {
+  @override
+  bool get mounted => _messenger.mounted;
+
+  @override
+  void show(String message, {SnackBarType type = SnackBarType.info, Duration? duration}) {
+    _messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: type == SnackBarType.error ? TextStyle(color: _colorScheme.onError) : null,
+        ),
+        backgroundColor: type == SnackBarType.error ? _colorScheme.error : null,
+        duration: duration ?? const Duration(milliseconds: 4000),
+      ),
+    );
+  }
+}
+
+class _GlassToastPresenter(final OverlayState _overlay) implements SnackBarPresenter {
+  @override
+  bool get mounted => _overlay.mounted;
+
+  @override
+  void show(String message, {SnackBarType type = SnackBarType.info, Duration? duration}) {
+    showGlassToast(_overlay, message, type: type, duration: duration ?? const Duration(seconds: 4));
+  }
+}

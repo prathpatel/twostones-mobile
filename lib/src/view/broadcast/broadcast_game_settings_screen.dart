@@ -1,0 +1,116 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/model/broadcast/broadcast_analysis_controller.dart';
+import 'package:lichess_mobile/src/model/broadcast/broadcast_preferences.dart';
+import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/view/analysis/engine_settings_widget.dart';
+import 'package:lichess_mobile/src/view/explorer/opening_explorer_settings.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/settings.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const BroadcastGameSettingsScreen(
+  final BroadcastRoundId roundId,
+  final BroadcastGameId gameId,
+) extends ConsumerWidget {
+  static Route<dynamic> buildRoute({
+    required BroadcastRoundId roundId,
+    required BroadcastGameId gameId,
+  }) {
+    return buildScreenRoute(screen: BroadcastGameSettingsScreen(roundId, gameId));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = broadcastAnalysisControllerProvider((roundId: roundId, gameId: gameId));
+
+    final broadcastPrefs = ref.watch(broadcastPreferencesProvider);
+    final isSoundEnabled = ref.watch(generalPreferencesProvider).isSoundEnabled;
+
+    return PlatformScaffold(
+      appBar: PlatformAppBar(title: Text(context.l10n.settingsSettings)),
+      body: ListView(
+        children: [
+          ListSection(
+            children: [
+              SwitchSettingTile(
+                title: Text(context.l10n.sound),
+                value: isSoundEnabled,
+                onChanged: (value) {
+                  ref.read(generalPreferencesProvider.notifier).toggleSoundEnabled();
+                },
+              ),
+              SwitchSettingTile(
+                title: Text(context.l10n.inlineNotation),
+                value: broadcastPrefs.inlineNotation,
+                onChanged: (value) =>
+                    ref.read(broadcastPreferencesProvider.notifier).toggleInlineNotation(),
+              ),
+              SwitchSettingTile(
+                title: Text(context.l10n.mobileShowEngineLines),
+                value: broadcastPrefs.showEngineLines,
+                onChanged: (value) =>
+                    ref.read(broadcastPreferencesProvider.notifier).toggleShowEngineLines(),
+              ),
+              ListTile(
+                title: Text(context.l10n.openingExplorer),
+                onTap: () => showAdaptiveBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => const OpeningExplorerSettings(),
+                ),
+              ),
+            ],
+          ),
+          ListSection(
+            header: SettingsSectionTitle(context.l10n.computerAnalysis),
+            children: [
+              SwitchSettingTile(
+                title: Text(context.l10n.mobileServerAnalysis),
+                value: broadcastPrefs.enableServerAnalysis,
+                onChanged: (_) {
+                  ref.read(broadcastPreferencesProvider.notifier).toggleServerAnalysis();
+                },
+              ),
+              SwitchSettingTile(
+                title: Text(context.l10n.mobileShowEvaluationGauge),
+                value: broadcastPrefs.showEvaluationGauge,
+                onChanged: (value) =>
+                    ref.read(broadcastPreferencesProvider.notifier).toggleShowEvaluationGauge(),
+              ),
+              SwitchSettingTile(
+                title: Text(context.l10n.toggleGlyphAnnotations),
+                value: broadcastPrefs.showAnnotations,
+                onChanged: (_) =>
+                    ref.read(broadcastPreferencesProvider.notifier).toggleAnnotations(),
+              ),
+              SwitchSettingTile(
+                title: Text(context.l10n.mobileShowComments),
+                value: broadcastPrefs.showPgnComments,
+                onChanged: (_) =>
+                    ref.read(broadcastPreferencesProvider.notifier).togglePgnComments(),
+              ),
+              SwitchSettingTile(
+                title: Text(context.l10n.bestMoveArrow),
+                value: broadcastPrefs.showBestMoveArrow,
+                onChanged: (value) =>
+                    ref.read(broadcastPreferencesProvider.notifier).toggleShowBestMoveArrow(),
+              ),
+            ],
+          ),
+          EngineSettingsWidget(
+            onSetEngineSearchTime: (value) =>
+                ref.read(controller.notifier).setEngineSearchTime(value),
+            onSetNumEvalLines: (value) => ref.read(controller.notifier).setNumEvalLines(value),
+            onSetEngineCores: (value) => ref.read(controller.notifier).setEngineCores(value),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,0 +1,229 @@
+import 'dart:math';
+
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/model/account/account_preferences.dart';
+import 'package:lichess_mobile/src/model/account/account_repository.dart';
+import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
+import 'package:lichess_mobile/src/model/game/game_bookmarks.dart';
+import 'package:lichess_mobile/src/model/game/game_history.dart';
+import 'package:lichess_mobile/src/model/user/user.dart';
+import 'package:lichess_mobile/src/model/user/user_repository.dart';
+import 'package:lichess_mobile/src/network/connectivity.dart';
+import 'package:lichess_mobile/src/network/http.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/focus_detector.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/utils/share.dart';
+import 'package:lichess_mobile/src/view/account/edit_profile_screen.dart';
+import 'package:lichess_mobile/src/view/account/game_bookmarks_screen.dart';
+import 'package:lichess_mobile/src/view/game/game_list_tile.dart';
+import 'package:lichess_mobile/src/view/settings/account_preferences_screen.dart';
+import 'package:lichess_mobile/src/view/user/perf_cards.dart';
+import 'package:lichess_mobile/src/view/user/recent_games.dart';
+import 'package:lichess_mobile/src/view/user/user_activity.dart';
+import 'package:lichess_mobile/src/view/user/user_profile.dart';
+import 'package:lichess_mobile/src/view/user/user_stats_section.dart';
+import 'package:lichess_mobile/src/widgets/buttons.dart';
+import 'package:lichess_mobile/src/widgets/feedback.dart';
+import 'package:lichess_mobile/src/widgets/haptic_refresh_indicator.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/platform_context_menu_button.dart';
+import 'package:lichess_mobile/src/widgets/shimmer.dart';
+import 'package:lichess_mobile/src/widgets/user.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:share_plus/share_plus.dart';
+
+/// The number of bookmarked games shown on the profile, the others are in [GameBookmarksScreen].
+const _kNbBookmarksShown = 5;
+
+class const ProfileScreen({super.key}) extends ConsumerStatefulWidget {
+  static Route<dynamic> buildRoute() {
+    return buildScreenRoute(screen: const ProfileScreen());
+  }
+
+  @override
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+final _accountActivityProvider = FutureProvider.autoDispose<IList<UserActivity>>((ref) {
+  final authUser = ref.watch(authControllerProvider);
+  if (authUser == null) return IList();
+  return ref.read(userRepositoryProvider).getActivity(authUser.user.id);
+}, name: 'userActivityProvider');
+
+class _ProfileScreenState() extends ConsumerState<ProfileScreen> {
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final account = ref.watch(accountProvider);
+    final online = ref.watch(isDeviceOnlineProvider);
+    return FocusDetector(
+      onFocusGained: () {
+        if (!context.mounted) return;
+        ref.invalidate(accountProvider);
+        ref.invalidate(_accountActivityProvider);
+        ref.invalidate(myRecentGamesProvider);
+        ref.invalidate(gameBookmarksPaginatorProvider);
+      },
+      child: PlatformScaffold(
+        appBar: PlatformAppBar(
+          // A long title, next to the actions.
+          centerTitle: false,
+          titleSpacing: 0,
+          title: account.when(
+            data: (user) => user == null
+                ? const SizedBox.shrink()
+                : UserAppBarTitleWidget(
+                    user: user.lightUser,
+                    isOnline: online,
+                    seenAt: user.seenAt,
+                    avatar: AccountAvatar(user),
+                  ),
+            loading: () => const SizedBox.shrink(),
+            error: (error, _) => const SizedBox.shrink(),
+          ),
+          actions: [
+            SemanticIconButton(
+              icon: const Icon(Icons.settings),
+              semanticsLabel: context.l10n.mobileAccountPreferences,
+              onPressed: () => Navigator.of(context).push(AccountPreferencesScreen.buildRoute()),
+            ),
+            ContextMenuIconButton(
+              semanticsLabel: 'Profile menu',
+              icon: const Icon(Icons.more_horiz),
+              actions: [
+                ContextMenuAction(
+                  icon: Icons.edit,
+                  label: context.l10n.editProfile,
+                  onPressed: () => Navigator.of(context).push(EditProfileScreen.buildRoute()),
+                ),
+                if (account.value case final user?)
+                  ContextMenuAction(
+                    icon: Theme.of(context).platform == TargetPlatform.iOS
+                        ? Icons.ios_share
+                        : Icons.share,
+                    label: context.l10n.mobileShare,
+                    onPressed: () => launchShareDialog(
+                      context,
+                      ShareParams(uri: lichessUri('/@/${user.username}')),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        body: account.when(
+          data: (user) {
+            if (user == null) {
+              return Center(child: Text(context.l10n.mobileMustBeLoggedIn));
+            }
+            final activity = ref.watch(_accountActivityProvider);
+            final recentGames = ref.watch(myRecentGamesProvider);
+            final nbOfGames = ref.watch(userNumberOfGamesProvider(null)).value ?? 0;
+            final nbBookmarks = user.count?.bookmark ?? 0;
+            final bookmarks = nbBookmarks > 0 ? ref.watch(gameBookmarksPaginatorProvider) : null;
+            return HapticRefreshIndicator(
+              key: _refreshIndicatorKey,
+              onRefresh: () => Future.wait([
+                ref.refresh(accountProvider.future),
+                ref.refresh(_accountActivityProvider.future),
+                ref.refresh(myRecentGamesProvider.future),
+                if (nbBookmarks > 0) ref.refresh(gameBookmarksPaginatorProvider.future),
+              ]),
+              child: ListView(
+                children: [
+                  UserProfileWidget(user: user),
+                  const AccountPerfCards(),
+                  UserStatsSection(user: user, isMe: true),
+                  UserActivityWidget(activity: activity, user: user.lightUser),
+                  switch (bookmarks) {
+                    AsyncData(value: final state) when state.gameList.isNotEmpty => ListSection(
+                      header: Text(context.l10n.nbBookmarks(nbBookmarks)),
+                      hasLeading: true,
+                      onHeaderTap: max(nbBookmarks, state.gameList.length) > _kNbBookmarksShown
+                          ? () {
+                              Navigator.of(context)
+                                  .push(GameBookmarksScreen.buildRoute(nbBookmarks: nbBookmarks));
+                            }
+                          : null,
+                      children: [
+                        for (final item in state.gameList.take(_kNbBookmarksShown))
+                          GameListTile(item: item),
+                      ],
+                    ),
+                    AsyncLoading() => Shimmer(
+                      child: ShimmerLoading(
+                        isLoading: true,
+                        child: ListSection.loading(
+                          itemsNumber: min(nbBookmarks, _kNbBookmarksShown),
+                          header: true,
+                          hasLeading: true,
+                        ),
+                      ),
+                    ),
+                    _ => const SizedBox.shrink(),
+                  },
+                  RecentGamesWidget(recentGames: recentGames, nbOfGames: nbOfGames, user: null),
+                ],
+              ),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator.adaptive()),
+          error: (error, _) {
+            return FullScreenRetryRequest(onRetry: () => ref.invalidate(accountProvider));
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class const AccountPerfCards({final EdgeInsetsGeometry? padding}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final account = ref.watch(accountProvider);
+    // [PerfCards] shows nothing until the ratings preference is known, so the skeleton is kept until
+    // then rather than collapsing the section in between. Watching it here also starts that request
+    // alongside the account one, instead of once the account has loaded.
+    final showRatings = ref.watch(showRatingsPrefProvider);
+    return switch ((account, showRatings)) {
+      (AsyncData(value: final user?), AsyncData()) => PerfCards(
+        user: user,
+        isMe: true,
+        padding: padding,
+      ),
+      (AsyncData(value: null), _) ||
+      (AsyncError(), _) ||
+      (_, AsyncError()) => const SizedBox.shrink(),
+      _ => Shimmer(
+        child: Padding(
+          padding: padding ?? Styles.bodySectionPadding,
+          child: SizedBox(
+            height: 106,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 3.0),
+              scrollDirection: Axis.horizontal,
+              itemCount: 5,
+              separatorBuilder: (context, index) => const SizedBox(width: 10),
+              itemBuilder: (context, index) => ShimmerLoading(
+                isLoading: true,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(10.0),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    };
+  }
+}

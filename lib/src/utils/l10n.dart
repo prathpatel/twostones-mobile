@@ -1,0 +1,226 @@
+import 'package:intl/intl.dart';
+import 'package:lichess_mobile/l10n/l10n.dart';
+import 'package:material_ui/material_ui.dart';
+
+DateFormat get _dateFormatterWithYear => DateFormat.yMMMMd();
+DateFormat get _dateFormatterWithYearShort => DateFormat.yMMMd();
+DateFormat get _monthFormatterWithYear => DateFormat.yMMMM();
+DateFormat get _monthFormatterWithYearShort => DateFormat.yMMM();
+
+/// Formats a raw PGN date string, as found in the tags of an imported game.
+///
+/// PGN dates are partially unknown more often than not, so we show as much of [date] as we can
+/// parse: '1972.08.31' gives a localized date, '1972.08.??' a localized month, '1972.??.??' the
+/// year alone, and anything else '????'.
+String formatPgnDate(String date, {bool shortDate = true}) {
+  final parts = date.split('.');
+  final year = int.tryParse(parts.first);
+  if (year == null) return '????';
+  final month = parts.length > 1 ? int.tryParse(parts[1]) : null;
+  if (month == null || month < 1 || month > 12) return year.toString();
+  final day = parts.length > 2 ? int.tryParse(parts[2]) : null;
+  final parsed = day != null ? DateTime(year, month, day) : null;
+  // A day out of the month's range (e.g. '1972.02.31') rolls over to the next month
+  if (parsed == null || parsed.day != day) {
+    final monthFormatter = shortDate ? _monthFormatterWithYearShort : _monthFormatterWithYear;
+    return monthFormatter.format(DateTime(year, month));
+  }
+  final dateFormatter = shortDate ? _dateFormatterWithYearShort : _dateFormatterWithYear;
+  return dateFormatter.format(parsed);
+}
+
+/// Formats the time of day of [date] in the locale's format (e.g. '3:05 PM' or '15:05'), or always
+/// in 24-hour format if the user set their device to it.
+String formatTimeOfDay(BuildContext context, DateTime date) => MaterialLocalizations.of(context)
+    .formatTimeOfDay(
+      TimeOfDay.fromDateTime(date),
+      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+    );
+
+/// Formats the calendar day of [date] as the header of a list grouped by day: 'Today', 'Yesterday',
+/// 'N days ago' within a week, then the date, with its year only if it's not the current one.
+///
+/// Unlike [relativeDate], each day gets its own label.
+String formatDayHeader(AppLocalizations l10n, DateTime date) {
+  final now = DateTime.now();
+  final local = date.toLocal();
+  // Count calendar days in UTC so that a daylight saving time change between the two dates
+  // doesn't shorten a day to 23 hours.
+  final days = DateTime.utc(
+    now.year,
+    now.month,
+    now.day,
+  ).difference(DateTime.utc(local.year, local.month, local.day)).inDays;
+  return switch (days) {
+    0 => l10n.today,
+    1 => l10n.yesterday,
+    <= 7 => l10n.timeagoNbDaysAgo(days),
+    _ => (local.year == now.year ? DateFormat.MMMMd() : DateFormat.yMMMMd()).format(local),
+  };
+}
+
+/// Formats a date as a relative date string from now.
+String relativeDate(AppLocalizations l10n, DateTime date, {bool shortDate = true}) {
+  final now = DateTime.now();
+  final diff = date.difference(now);
+
+  final yearFormatter = shortDate ? _dateFormatterWithYearShort : _dateFormatterWithYear;
+
+  if (diff.isNegative) {
+    if (diff.inDays == 0) {
+      return diff.inHours == 0
+          ? diff.inMinutes == 0
+                ? l10n.timeagoRightNow
+                : l10n.timeagoNbMinutesAgo(diff.inMinutes.abs())
+          : l10n.timeagoNbHoursAgo(diff.inHours.abs());
+    }
+    // Past a day, count calendar days rather than 24 hour periods, so that a date matches the day
+    // it falls on (e.g. 2 days ago at 22:00 is "2 days ago" at 08:00, not "Yesterday").
+    final local = date.toLocal();
+    final days = DateTime.utc(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime.utc(local.year, local.month, local.day)).inDays;
+    return days == 1
+        ? l10n.yesterday
+        : days <= 7
+        ? l10n.timeagoNbDaysAgo(days)
+        : days <= 30
+        ? l10n.timeagoNbWeeksAgo((days / 7).round())
+        : days <= 365
+        ? l10n.timeagoNbMonthsAgo((days / 30).round())
+        : yearFormatter.format(date);
+  }
+  return diff.inDays == 0
+      ? diff.inHours == 0
+            ? diff.inMinutes == 0
+                  ? l10n.timeagoInNbSeconds(diff.inSeconds)
+                  : l10n.timeagoInNbMinutes(diff.inMinutes)
+            : l10n.timeagoInNbHours(diff.inHours)
+      : diff.inDays.abs() <= 7
+      ? l10n.timeagoInNbDays(diff.inDays)
+      : diff.inDays.abs() <= 30
+      ? l10n.timeagoInNbWeeks((diff.inDays.abs() / 7).round())
+      : diff.inDays.abs() <= 365
+      ? l10n.timeagoInNbMonths((diff.inDays.abs() / 30).round())
+      : yearFormatter.format(date);
+}
+
+/// Returns a localized locale name.
+///
+/// Names taken from https://github.com/lichess-org/lila/blob/master/modules/i18n/src/main/LangList.scala.
+///
+/// Not all of these are actually supported in the app currently, but this way we won't have to check the lila code again when we add more languages.
+String localeToLocalizedName(Locale locale) => switch (locale) {
+  Locale(languageCode: 'af') => 'Afrikaans',
+  Locale(languageCode: 'an') => 'Aragonés',
+  Locale(languageCode: 'ar') => 'العربية',
+  Locale(languageCode: 'as') => 'অসমীয়া',
+  Locale(languageCode: 'av') => 'авар мацӀ',
+  Locale(languageCode: 'az') => 'Azərbaycanca',
+  Locale(languageCode: 'be') => 'Беларуская',
+  Locale(languageCode: 'bg') => 'български език',
+  Locale(languageCode: 'bn') => 'বাংলা',
+  Locale(languageCode: 'br') => 'Brezhoneg',
+  Locale(languageCode: 'bs') => 'Bosanski',
+  Locale(languageCode: 'ca') => 'Català, valencià',
+  Locale(languageCode: 'ckb') => 'کوردی سۆرانی',
+  Locale(languageCode: 'co') => 'Corsu',
+  Locale(languageCode: 'cs') => 'Čeština',
+  Locale(languageCode: 'cv') => 'чӑваш чӗлхи',
+  Locale(languageCode: 'cy') => 'Cymraeg',
+  Locale(languageCode: 'da') => 'Dansk',
+  Locale(languageCode: 'de') => 'Deutsch',
+  Locale(languageCode: 'el') => 'Ελληνικά',
+  Locale(languageCode: 'en', countryCode: 'US') => 'English (US)',
+  Locale(languageCode: 'en') => 'English',
+  Locale(languageCode: 'eo') => 'Esperanto',
+  Locale(languageCode: 'es') => 'Español',
+  Locale(languageCode: 'et') => 'Eesti keel',
+  Locale(languageCode: 'eu') => 'Euskara',
+  Locale(languageCode: 'fa') => 'فارسی',
+  Locale(languageCode: 'fi') => 'Suomen kieli',
+  Locale(languageCode: 'fo') => 'Føroyskt',
+  Locale(languageCode: 'fr') => 'Français',
+  Locale(languageCode: 'frp') => 'Arpitan',
+  Locale(languageCode: 'fy') => 'Frysk',
+  Locale(languageCode: 'ga') => 'Gaeilge',
+  Locale(languageCode: 'gd') => 'Gàidhlig',
+  Locale(languageCode: 'gl') => 'Galego',
+  Locale(languageCode: 'gsw') => 'Schwizerdütsch',
+  Locale(languageCode: 'gu') => 'ગુજરાતી',
+  Locale(languageCode: 'he') => 'עִבְרִית',
+  Locale(languageCode: 'hi') => 'हिन्दी, हिंदी',
+  Locale(languageCode: 'hr') => 'Hrvatski',
+  Locale(languageCode: 'hu') => 'Magyar',
+  Locale(languageCode: 'hy') => 'Հայերեն',
+  Locale(languageCode: 'ia') => 'Interlingua',
+  Locale(languageCode: 'id') => 'Bahasa Indonesia',
+  Locale(languageCode: 'io') => 'Ido',
+  Locale(languageCode: 'is') => 'Íslenska',
+  Locale(languageCode: 'it') => 'Italiano',
+  Locale(languageCode: 'ja') => '日本語',
+  Locale(languageCode: 'jbo') => 'Lojban',
+  Locale(languageCode: 'jv') => 'Basa Jawa',
+  Locale(languageCode: 'ka') => 'ქართული',
+  Locale(languageCode: 'kab') => 'Taqvaylit',
+  Locale(languageCode: 'kk') => 'қазақша',
+  Locale(languageCode: 'kmr') => 'Kurdî (Kurmancî)',
+  Locale(languageCode: 'kn') => 'ಕನ್ನಡ',
+  Locale(languageCode: 'ko') => '한국어',
+  Locale(languageCode: 'ky') => 'кыргызча',
+  Locale(languageCode: 'la') => 'Lingua Latina',
+  Locale(languageCode: 'lb') => 'Lëtzebuergesch',
+  Locale(languageCode: 'lt') => 'Lietuvių kalba',
+  Locale(languageCode: 'lv') => 'Latviešu valoda',
+  Locale(languageCode: 'mg') => 'Fiteny malagasy',
+  Locale(languageCode: 'mk') => 'македонски јази',
+  Locale(languageCode: 'ml') => 'മലയാളം',
+  Locale(languageCode: 'mn') => 'монгол',
+  Locale(languageCode: 'mr') => 'मराठी',
+  Locale(languageCode: 'nb') => 'Norsk bokmål',
+  Locale(languageCode: 'ne') => 'नेपाली',
+  Locale(languageCode: 'nl') => 'Nederlands',
+  Locale(languageCode: 'nn') => 'Norsk nynorsk',
+  Locale(languageCode: 'pi') => 'पालि',
+  Locale(languageCode: 'pl') => 'Polski',
+  Locale(languageCode: 'ps') => 'پښتو',
+  Locale(languageCode: 'pt', countryCode: 'BR') => 'Português (BR)',
+  Locale(languageCode: 'pt') => 'Português',
+  Locale(languageCode: 'ro') => 'Română',
+  Locale(languageCode: 'ru') => 'русский язык',
+  Locale(languageCode: 'ry') => 'Русинська бисїда',
+  Locale(languageCode: 'sa') => 'संस्कृत',
+  Locale(languageCode: 'sk') => 'Slovenčina',
+  Locale(languageCode: 'sl') => 'Slovenščina',
+  Locale(languageCode: 'so') => 'Af Soomaali',
+  Locale(languageCode: 'sq') => 'Shqip',
+  Locale(languageCode: 'sr') => 'Српски језик',
+  Locale(languageCode: 'sv') => 'Svenska',
+  Locale(languageCode: 'sw') => 'Kiswahili',
+  Locale(languageCode: 'ta') => 'தமிழ்',
+  Locale(languageCode: 'tg') => 'тоҷикӣ',
+  Locale(languageCode: 'th') => 'ไทย',
+  Locale(languageCode: 'tk') => 'Türkmençe',
+  Locale(languageCode: 'tl') => 'Tagalog',
+  Locale(languageCode: 'tp') => 'Toki pona',
+  Locale(languageCode: 'tr') => 'Türkçe',
+  Locale(languageCode: 'uk') => 'українська',
+  Locale(languageCode: 'ur') => 'اُردُو',
+  Locale(languageCode: 'uz') => 'Özbekça',
+  Locale(languageCode: 'vi') => 'Tiếng Việt',
+  Locale(languageCode: 'yo') => 'Yorùbá',
+  Locale(languageCode: 'zh', countryCode: 'TW') => '繁體中文',
+  Locale(languageCode: 'zh') => '简体中文',
+  Locale(languageCode: 'zu') => 'isiZulu',
+  _ => locale.toString(),
+};
+
+/// Returns the given [locales] sorted alphabetically by their localized
+/// (native) name, following Unicode ordering.
+///
+/// This groups locales written in the same script together, instead of the
+/// default ordering by language code.
+List<Locale> localesSortedByLocalizedName(Iterable<Locale> locales) =>
+    [...locales]..sort((a, b) => localeToLocalizedName(a).compareTo(localeToLocalizedName(b)));

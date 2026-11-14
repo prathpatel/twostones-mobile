@@ -1,0 +1,248 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/model/puzzle/puzzle_angle.dart';
+import 'package:lichess_mobile/src/model/puzzle/puzzle_providers.dart';
+import 'package:lichess_mobile/src/model/puzzle/puzzle_theme.dart';
+import 'package:lichess_mobile/src/network/connectivity.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/tab_navigation.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/view/puzzle/opening_screen.dart';
+import 'package:lichess_mobile/src/view/puzzle/puzzle_screen.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/platform_search_bar.dart';
+import 'package:material_ui/material_ui.dart';
+
+final _themesProvider =
+    FutureProvider.autoDispose<
+      (bool, IMap<PuzzleThemeKey, int>, IMap<PuzzleThemeKey, PuzzleThemeData>?, bool)
+    >((ref) async {
+      final isOnline = await ref.watch(
+        connectivityChangesProvider.selectAsync((status) => status.isOnline),
+      );
+      final savedThemes = await ref.watch(savedThemeBatchesProvider.future);
+      IMap<PuzzleThemeKey, PuzzleThemeData>? onlineThemes;
+      if (isOnline) {
+        try {
+          onlineThemes = await ref.watch(puzzleThemesProvider.future);
+        } catch (e) {
+          onlineThemes = null;
+        }
+      }
+      final savedOpenings = await ref.watch(savedOpeningBatchesProvider.future);
+      return (isOnline, savedThemes, onlineThemes, savedOpenings.isNotEmpty);
+    });
+
+class const PuzzleThemesScreen({super.key}) extends StatefulWidget {
+  static Route<dynamic> buildRoute() {
+    return buildScreenRoute(screen: const PuzzleThemesScreen());
+  }
+
+  @override
+  State<PuzzleThemesScreen> createState() => _PuzzleThemesScreenState();
+}
+
+class _PuzzleThemesScreenState() extends State<PuzzleThemesScreen> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+    final searchBar = PlatformSearchBar(
+      controller: _searchController,
+      hintText: context.l10n.search,
+      // On iOS, below the large title, sticking below the app bar buttons when scrolled.
+      inAppBar: isIOS,
+      onChanged: (String query) => setState(() => _searchQuery = query),
+      onClear: () {
+        _searchController.clear();
+        setState(() => _searchQuery = '');
+      },
+    );
+
+    return PlatformScaffold(
+      appBar: PlatformAppBar(
+        title: Text(context.l10n.puzzlePuzzleThemes),
+        largeTitle: true,
+        bottom: isIOS
+            ? PreferredSize(
+                preferredSize: Size.fromHeight(kGlassAppBarBottomPadding.vertical + 44.0),
+                child: Padding(padding: kGlassAppBarBottomPadding, child: searchBar),
+              )
+            : null,
+      ),
+      body: _Body(
+        searchQuery: _searchQuery,
+        searchBar: isIOS
+            ? null
+            : Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: searchBar,
+              ),
+      ),
+    );
+  }
+}
+
+class const _Body({required final String searchQuery, required final Widget? searchBar})
+    extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // skip recommended category since we display it on the puzzle tab screen
+    final list = ref.watch(puzzleThemeCategoriesProvider).skip(1).toList();
+    final themes = ref.watch(_themesProvider);
+
+    return themes.when(
+      data: (data) {
+        final (hasConnectivity, savedThemes, onlineThemes, hasSavedOpenings) = data;
+
+        final openingsAvailable = hasConnectivity || hasSavedOpenings;
+        if (searchQuery.isNotEmpty) {
+          final query = searchQuery.toLowerCase();
+          final matched = [
+            for (final (_, categoryThemes) in list)
+              for (final theme in categoryThemes)
+                if (theme.l10n(context.l10n).name.toLowerCase().contains(query) ||
+                    theme.l10n(context.l10n).description.toLowerCase().contains(query))
+                  theme,
+          ];
+
+          return ListView(
+            children: [
+              ?searchBar,
+              ListSection(
+                hasLeading: true,
+                children: matched.map((theme) {
+                  final isThemeAvailable = hasConnectivity || savedThemes.containsKey(theme);
+                  return _ThemeTile(
+                    theme: theme,
+                    isThemeAvailable: isThemeAvailable,
+                    hasConnectivity: hasConnectivity,
+                    onlineThemes: onlineThemes,
+                    savedThemes: savedThemes,
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        }
+
+        return ListView(
+          children: [
+            ?searchBar,
+            ListTile(
+              enabled: openingsAvailable,
+              title: Text(context.l10n.puzzleByOpenings),
+              trailing: const Icon(Icons.keyboard_arrow_right),
+              onTap: openingsAvailable
+                  ? () {
+                      Navigator.of(context).push(OpeningThemeScreen.buildRoute());
+                    }
+                  : null,
+            ),
+            for (final category in list)
+              _Category(
+                hasConnectivity: hasConnectivity,
+                category: category,
+                onlineThemes: onlineThemes,
+                savedThemes: savedThemes,
+              ),
+          ],
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator.adaptive()),
+      error: (error, stack) => const Center(child: Text('Could not load themes.')),
+    );
+  }
+}
+
+class const _ThemeTile({
+  required final PuzzleThemeKey theme,
+  required final bool isThemeAvailable,
+  required final bool hasConnectivity,
+  required final IMap<PuzzleThemeKey, PuzzleThemeData>? onlineThemes,
+  required final IMap<PuzzleThemeKey, int> savedThemes,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final themeCountStyle = TextStyle(
+      fontSize: 12,
+      color: textShade(context, Styles.subtitleOpacity),
+    );
+
+    return ListTile(
+      enabled: isThemeAvailable,
+      leading: Icon(theme.icon),
+      trailing: hasConnectivity && onlineThemes?.containsKey(theme) == true
+          ? Padding(
+              padding: const EdgeInsets.only(left: 6.0),
+              child: Text('${onlineThemes![theme]!.count}', style: themeCountStyle),
+            )
+          : savedThemes.containsKey(theme)
+          ? Padding(
+              padding: const EdgeInsets.only(left: 6.0),
+              child: Text('${savedThemes[theme]!}', style: themeCountStyle),
+            )
+          : null,
+      title: Text(theme.l10n(context.l10n).name),
+      subtitle: Text(
+        theme.l10n(context.l10n).description,
+        maxLines: 10,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: textShade(context, Styles.subtitleOpacity)),
+      ),
+      onTap: isThemeAvailable
+          ? () {
+              Navigator.of(context)
+                  .pushHidingTabBar(PuzzleScreen.buildRoute(angle: PuzzleTheme(theme)));
+            }
+          : null,
+    );
+  }
+}
+
+class const _Category({
+  required final bool hasConnectivity,
+  required final PuzzleThemeCategory category,
+  required final IMap<PuzzleThemeKey, PuzzleThemeData>? onlineThemes,
+  required final IMap<PuzzleThemeKey, int> savedThemes,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final (categoryName, themes) = category;
+    final isCategoryAvailable =
+        hasConnectivity || themes.any((theme) => savedThemes.containsKey(theme));
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        enabled: isCategoryAvailable,
+        title: Text(categoryName),
+        children: [
+          ListSection(
+            hasLeading: true,
+            children: themes.map((theme) {
+              final isThemeAvailable = hasConnectivity || savedThemes.containsKey(theme);
+              return _ThemeTile(
+                theme: theme,
+                isThemeAvailable: isThemeAvailable,
+                hasConnectivity: hasConnectivity,
+                onlineThemes: onlineThemes,
+                savedThemes: savedThemes,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}

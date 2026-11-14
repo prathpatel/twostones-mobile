@@ -1,0 +1,68 @@
+import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/styles/icon_extensions.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/widgets/misc.dart';
+import 'package:material_ui/material_ui.dart';
+
+/// A widget that displays a variant [Icon] followed by its translated label, sized and colored to
+/// match the surrounding text style, with a description below. Intended for use as a [labelBuilder]
+/// in [showChoicePicker].
+class const VariantLabel(final Variant variant, {super.key}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style;
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+    final alignment = isAndroid ? CrossAxisAlignment.start : CrossAxisAlignment.center;
+    final descriptionStyle = isAndroid
+        ? TextStyle(
+            height: 1.2,
+            fontSize: 12.0,
+            color: DefaultTextStyle.of(context).style.color?.withValues(alpha: 0.6),
+          )
+        : Styles.subtitle.copyWith(color: textShade(context, Styles.subtitleOpacity));
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: alignment,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Icon(variant.icon, size: style.fontSize, color: style.color),
+              ),
+              const WidgetSpan(child: SizedBox(width: 8)),
+              TextSpan(text: variant.label(context.l10n)),
+            ],
+          ),
+        ),
+        DefaultTextStyle(
+          style: style,
+          textAlign: DefaultTextStyle.of(context).textAlign,
+          child: Text(variant.description(context.l10n), style: descriptionStyle),
+        ),
+      ],
+    );
+  }
+}
+
+/// A widget that displays a [AppBarTitleText] preceded by an icon based on the variant type.
+class const VariantAppBarTitle({
+  super.key,
+  required final Variant variant,
+  required final String title,
+}) extends StatelessWidget {
+  static const excludedIcons = [Variant.standard, Variant.fromPosition];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!excludedIcons.contains(variant)) ...[Icon(variant.icon), const SizedBox(width: 5.0)],
+        Flexible(child: AppBarTitleText(title)),
+      ],
+    );
+  }
+}

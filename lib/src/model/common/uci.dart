@@ -1,0 +1,137 @@
+import 'package:dartchess/dartchess.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/model/common/node.dart';
+
+part 'uci.freezed.dart';
+part 'uci.g.dart';
+
+/// UciCharPair from scalachess
+@Freezed(fromJson: true, toJson: true, toStringOverride: false)
+sealed class const UciCharPair._() with _$UciCharPair {
+  const factory(String a, String b) = _UciCharPair;
+
+  factory fromStringId(String id) {
+    if (id.length != 2) {
+      throw ArgumentError('Invalid id $id');
+    }
+    return UciCharPair(id[0], id[1]);
+  }
+
+  /// Creates a UciCharPair from a UCI move.
+  ///
+  /// Throws an [ArgumentError] if the move is invalid.
+  factory fromUci(String uci) {
+    final move = Move.parse(uci);
+    if (move == null) {
+      throw ArgumentError('Invalid uci $uci');
+    }
+    return UciCharPair.fromMove(move);
+  }
+
+  factory fromMove(Move move) => switch (move) {
+    NormalMove(from: final f, to: final t, promotion: final p) => UciCharPair(
+      String.fromCharCode(35 + f),
+      String.fromCharCode(p != null ? 35 + 64 + 8 * _promotionRoles.indexOf(p) + t.file : 35 + t),
+    ),
+    DropMove(to: final t, role: final r) => UciCharPair(
+      String.fromCharCode(35 + t),
+      String.fromCharCode(35 + 64 + 8 * 5 + _dropRoles.indexOf(r)),
+    ),
+  };
+
+  /// Creates a disambiguated [UciCharPair] for duplicate variations of the same move.
+  ///
+  /// For [duplicateIndex] <= 0, returns [base] unchanged.
+  /// For [duplicateIndex] > 0, encodes the duplicate index using Unicode private use area (0xE000..0xF8FF).
+  factory disambiguated(UciCharPair base, int duplicateIndex) {
+    final cleanBase = base.basePair;
+    if (duplicateIndex <= 0) return cleanBase;
+    return UciCharPair(
+      cleanBase.a,
+      String.fromCharCode(0xE000 + (duplicateIndex << 8) | cleanBase.b.codeUnitAt(0)),
+    );
+  }
+
+  /// Returns the base [UciCharPair] without any disambiguation encoding.
+  UciCharPair get basePair {
+    final bCode = b.codeUnitAt(0);
+    if (bCode >= 0xE000 && bCode <= 0xF8FF) {
+      return UciCharPair(a, String.fromCharCode(bCode & 0xFF));
+    }
+    return this;
+  }
+
+  factory fromJson(Map<String, dynamic> json) => _$UciCharPairFromJson(json);
+
+  @override
+  String toString() => '$a$b';
+}
+
+const _promotionRoles = [Role.queen, Role.rook, Role.bishop, Role.knight, Role.king];
+
+const _dropRoles = [Role.queen, Role.rook, Role.bishop, Role.knight, Role.pawn];
+
+/// Compact representation of a path to a game node made from concatenated
+/// UciCharPair strings.
+@Freezed(fromJson: true, toJson: true)
+sealed class const UciPath._() with _$UciPath {
+  const factory(String value) = _UciPath;
+
+  factory fromId(UciCharPair id) => UciPath(id.toString());
+  factory fromIds(Iterable<UciCharPair> ids) => UciPath(ids.map((id) => id.toString()).join(''));
+
+  factory fromNodeList(Iterable<Branch> nodeList) {
+    final path = StringBuffer();
+    for (final node in nodeList) {
+      path.write(node.id);
+    }
+    return UciPath(path.toString());
+  }
+
+  factory join(UciPath a, UciPath b) => UciPath(a.value + b.value);
+
+  /// Creates a UciPath from a list of UCI moves.
+  ///
+  /// Throws an [ArgumentError] if any of the moves is invalid.
+  factory fromUciMoves(Iterable<UCIMove> moves) {
+    final path = StringBuffer();
+    for (final move in moves) {
+      path.write(UciCharPair.fromUci(move));
+    }
+    return UciPath(path.toString());
+  }
+
+  static const empty = UciPath('');
+
+  UciPath operator +(UciCharPair id) => UciPath(value + id.toString());
+
+  UciCharPair operator [](int index) {
+    assert(index >= 0 && index < size);
+    return UciCharPair(value[index * 2], value[index * 2 + 1]);
+  }
+
+  bool contains(UciPath other) => value.startsWith(other.value);
+
+  UciPath stripPrefix(UciPath prefix) =>
+      contains(prefix) ? UciPath(value.substring(prefix.value.length)) : this;
+
+  UciPath truncate(int maxSize) =>
+      size <= maxSize ? this : UciPath(value.substring(0, maxSize * 2));
+
+  int get size => value.length ~/ 2;
+
+  UciCharPair? get head => value.isEmpty ? null : UciCharPair(value[0], value[1]);
+
+  UciCharPair? get last =>
+      value.isEmpty ? null : UciCharPair(value[value.length - 2], value[value.length - 1]);
+
+  UciPath get tail => value.isEmpty ? UciPath.empty : UciPath(value.substring(2));
+
+  UciPath get penultimate =>
+      value.isEmpty ? UciPath.empty : UciPath(value.substring(0, value.length - 2));
+
+  bool get isEmpty => value.isEmpty;
+
+  factory fromJson(Map<String, dynamic> json) => _$UciPathFromJson(json);
+}

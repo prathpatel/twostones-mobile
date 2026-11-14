@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <plurals name="teamLeaders">
+    <item quantity="other">အသင်းခေါင်းဆောင်</item>
+  </plurals>
+  <string name="requestDeclined">အသင်း ဝင်ရန် လူကြီးမင်း၏ တောင်းဆိုမှုအား အသင်း ခေါင်းဆောင်က ငြင်းပယ်ထားပါသည်။</string>
+  <string name="teamsIlead">မိမိ ဦးဆောင်သော အသင်းများ</string>
+  <string name="leadersChat">ခေါင်းဆောင်တို့ စကားပြောရန်</string>
+  <string name="entryCode">အသင်းသို့ ဝင်ရန် စကားဝှက်။</string>
+  <string name="incorrectEntryCode">စကားဝှက် မမှန်ပါ။</string>
+  <string name="joinLichessVariantTeam">သတင်းနှင့် ပွဲများ အတွက် lichess ရဲ့ တရားဝင် %s အသင်းကို ဝင်ပါ</string>
+</resources>

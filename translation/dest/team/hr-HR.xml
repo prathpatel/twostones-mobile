@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Tim</string>
+  <string name="teams">Timovi</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s člana</item>
+    <item quantity="few">%s člana</item>
+    <item quantity="other">%s člana</item>
+  </plurals>
+  <string name="allTeams">Svi timovi</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">Timovi koje vodiš</string>
+  <string name="newTeam">Novi tim</string>
+  <string name="myTeams">Moji timovi</string>
+  <string name="noTeamFound">Nijedan tim nije pronađen</string>
+  <string name="joinTeam">Priključi se timu</string>
+  <string name="quitTeam">Napusti tim</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Vođa tima</item>
+    <item quantity="few">Vođe tima</item>
+    <item quantity="other">Vođe tima</item>
+  </plurals>
+  <string name="teamRecentMembers">Nedavni članovi tima</string>
+  <string name="willBeReviewed">Voditelj tima razmotrit će tvoj zahtjev za pridruživanje.</string>
+  <string name="beingReviewed">Voditelj tima pregledava tvoj zahtjev za pridruživanje.</string>
+  <string name="requestDeclined">Voditelj tima je odbio vaš zahtjev za pridruživanje.</string>
+  <string name="teamBattle">Timska bitka</string>
+  <string name="teamBattleOverview">Bitka više timova, svaki igrač postiže bodove za svoj tim</string>
+  <string name="teamTournament">Timski turnir</string>
+  <string name="teamTournamentOverview">Arena turnir kojem se mogu pridružiti samo članovi tvog tima</string>
+  <string name="swissTournamentOverview">Švicarski turnir kojem se mogu pridružiti samo članovi vašeg tima</string>
+  <string name="teamsIlead">Timove koje vodim</string>
+  <string name="leadersChat">Chat voditelja</string>
+  <string name="entryCode">Ulazni kod tima</string>
+  <string name="entryCodeDescriptionForLeader">(Izborno) Ulazni kod koji novi članovi moraju znati da bi se pridružili ovom timu.</string>
+  <string name="incorrectEntryCode">Netočan ulazni kod.</string>
+  <string name="teamAlreadyExists">Ovaj tim već postoji.</string>
+  <string name="upcomingTournaments">Nadolazeći turniri</string>
+  <string name="completedTourns">Završeni turniri</string>
+  <string name="joinLichessVariantTeam">Pridružite se službenom %s timu za novosti i događaje</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="one">Bitka %s ekipe</item>
+    <item quantity="few">BItka %s ekipe</item>
+    <item quantity="other">Bitka %s ekipa</item>
+  </plurals>
+</resources>

@@ -1,0 +1,237 @@
+import 'dart:async';
+import 'dart:io';
+
+// ignore: deprecated_member_use
+import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoUiCompatibilityBridge;
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
+import 'package:intl/intl.dart';
+import 'package:l10n_esperanto/l10n_esperanto.dart';
+import 'package:lichess_mobile/l10n/l10n.dart';
+import 'package:lichess_mobile/src/constants.dart';
+import 'package:lichess_mobile/src/intl.dart';
+import 'package:lichess_mobile/src/model/account/account_repository.dart';
+import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
+import 'package:lichess_mobile/src/model/common/preloaded_data.dart';
+import 'package:lichess_mobile/src/model/game/game_live_activity.dart';
+import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
+import 'package:lichess_mobile/src/network/connectivity.dart';
+import 'package:lichess_mobile/src/service/account_service.dart';
+import 'package:lichess_mobile/src/service/announce_service.dart';
+import 'package:lichess_mobile/src/service/app_links_service.dart';
+import 'package:lichess_mobile/src/service/app_log_service.dart';
+import 'package:lichess_mobile/src/service/broadcast_service.dart';
+import 'package:lichess_mobile/src/service/challenge_service.dart';
+import 'package:lichess_mobile/src/service/correspondence_service.dart';
+import 'package:lichess_mobile/src/service/message_service.dart';
+import 'package:lichess_mobile/src/service/notification_service.dart';
+import 'package:lichess_mobile/src/service/quick_actions.dart';
+import 'package:lichess_mobile/src/service/recap_service.dart';
+import 'package:lichess_mobile/src/service/shared_pgn_service.dart';
+import 'package:lichess_mobile/src/tab_navigation.dart';
+import 'package:lichess_mobile/src/tab_scaffold.dart';
+import 'package:lichess_mobile/src/theme.dart';
+import 'package:lichess_mobile/src/ui_event_coordinator.dart';
+import 'package:lichess_mobile/src/utils/screen.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart' show usePinnedNavBar;
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart' show GlassNavigationShell;
+import 'package:material_ui/material_ui.dart';
+
+const String _kIosAppGroupId = 'group.org.lichess.mobileV2.LichessWidgets';
+const List<String> _kIosBlogWidgetKinds = [
+  'OfficialBlogWidget',
+  'CommunityBlogWidget',
+  'UserBlogFeedWidget',
+];
+
+/// Application initialization and main entry point.
+class const AppInitializationScreen({super.key}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<AsyncValue<PreloadedData>>(preloadedDataProvider, (_, state) {
+      if (state.hasValue || state.hasError) {
+        FlutterNativeSplash.remove();
+      }
+    });
+
+    switch (ref.watch(preloadedDataProvider)) {
+      case AsyncData():
+        return const Application();
+      case AsyncError(:final error, :final stackTrace):
+        debugPrint('SEVERE: [App] could not initialize app; $error\n$stackTrace');
+        return const SizedBox.shrink();
+      case _:
+        // loading screen is handled by the native splash screen
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+/// The main application widget.
+///
+/// This widget is the root of the application and is responsible for setting up
+/// the theme, locale, and other global settings.
+class const Application({super.key}) extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<Application> createState() => _AppState();
+}
+
+class _AppState() extends ConsumerState<Application> {
+  /// Whether the app has checked for online status for the first time.
+  bool _firstTimeOnlineCheck = false;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    // Start services. The UI event coordinator comes first: it must be listening on the event bus
+    // before any service has a chance to emit.
+    ref.read(uiEventCoordinatorProvider).start();
+    ref.read(appLogServiceProvider).start();
+    ref.read(notificationServiceProvider).start();
+    ref.read(messageServiceProvider).start();
+    ref.read(challengeServiceProvider).start();
+    ref.read(accountServiceProvider).start();
+    ref.read(correspondenceServiceProvider).start();
+    ref.read(quickActionServiceProvider).start();
+    ref.read(announceServiceProvider).start();
+    ref.read(appLinksServiceProvider).start();
+    ref.read(sharedPgnServiceProvider).start();
+    ref.read(broadcastServiceProvider).start();
+    ref.read(recapServiceProvider).start();
+
+    if (Platform.isIOS) {
+      HomeWidget.setAppGroupId(_kIosAppGroupId);
+      // No game screen is open at launch, so any game Live Activity is a leftover from a previous
+      // run (e.g. the app was killed during a game).
+      ref.read(gameLiveActivityChannelProvider).endAll();
+    }
+    HomeWidget.saveWidgetData<String>('lichessHost', kLichessHost);
+
+    if (Platform.isIOS) {
+      ref.listenManual(kidModeProvider, (prev, state) {
+        if (state.hasValue && prev?.value != state.value) {
+          HomeWidget.saveWidgetData<bool>('isKidMode', state.value).then((_) {
+            Future.wait([
+              for (final kind in _kIosBlogWidgetKinds) HomeWidget.updateWidget(iOSName: kind),
+            ]);
+          });
+        }
+      }, fireImmediately: true);
+      ref.listenManual(boardPreferencesProvider, (prev, state) {
+        if (prev == null ||
+            prev.boardTheme != state.boardTheme ||
+            prev.pieceSet != state.pieceSet) {
+          Future.wait([
+            HomeWidget.saveWidgetData<String>('boardTheme', state.boardTheme.name),
+            HomeWidget.saveWidgetData<String>('pieceSet', state.pieceSet.name),
+          ]).then((_) {
+            HomeWidget.updateWidget(iOSName: 'DailyPuzzleLargeWidget');
+          });
+        }
+      }, fireImmediately: true);
+    }
+
+    // [setupIntl] sets [Intl.defaultLocale] on startup: follow the app language from then on.
+    ref.listenManual(generalPreferencesProvider.select((prefs) => prefs.locale), (_, locale) {
+      Intl.defaultLocale = (locale ?? getSystemLocale(WidgetsBinding.instance)).toLanguageTag();
+    });
+
+    // Listening to the settled status rather than to [isDeviceOnlineProvider]: both actions are
+    // network calls, which must not be made on the optimistic assumption that a device whose
+    // status is not known yet is online.
+    ref.listenManual(connectivityChangesProvider, (prev, current) async {
+      // The previous state is read with [isDeviceOnlineIn], so that coming back from a check that
+      // failed — offline as far as the app is concerned — is an edge like any other.
+      final prevWasOffline = prev != null && !isDeviceOnlineIn(prev);
+      final currentIsOnline = current.value?.isOnline == true;
+
+      // Play registered moves whenever the app comes back online.
+      if (prevWasOffline && currentIsOnline) {
+        final nbMovesPlayed = await ref.read(correspondenceServiceProvider).playRegisteredMoves();
+        if (nbMovesPlayed > 0) {
+          ref.invalidate(ongoingGamesProvider);
+        }
+      }
+
+      // Perform actions once when the app comes online.
+      if (currentIsOnline && !_firstTimeOnlineCheck) {
+        _firstTimeOnlineCheck = true;
+        ref.read(correspondenceServiceProvider).syncGames();
+      }
+    });
+
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeConfig = ref.watch(
+      generalPreferencesProvider.select(
+        (prefs) => (
+          prefs.themeMode,
+          prefs.backgroundColor,
+          prefs.backgroundImage,
+          prefs.systemColors,
+          prefs.locale,
+        ),
+      ),
+    );
+    final boardTheme = ref.watch(boardPreferencesProvider.select((prefs) => prefs.boardTheme));
+    final theme = makeAppTheme(
+      context,
+      themeMode: themeConfig.$1,
+      backgroundColor: themeConfig.$2,
+      backgroundImage: themeConfig.$3,
+      systemColors: themeConfig.$4,
+      boardTheme: boardTheme,
+    );
+
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+
+    return MaterialApp(
+      navigatorKey: _navigatorKey,
+      // [AppLocalizations.localizationsDelegates] cannot be used: it is generated with the
+      // `flutter_localizations` delegates, which localize the Flutter material and cupertino
+      // libraries, not the `material_ui` and `cupertino_ui` ones the app is built with.
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        ...GlobalMaterialLocalizations.delegates,
+        MaterialLocalizationsEo.delegate,
+        CupertinoLocalizationsEo.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      title: 'lichess.org',
+      locale: themeConfig.$5,
+      theme: theme.copyWith(
+        navigationBarTheme: isIOS
+            ? null
+            : NavigationBarTheme.of(context)
+                  .copyWith(height: isShortVerticalScreen(context) ? 60 : null),
+      ),
+      // Packages not yet migrated to `material_ui` and `cupertino_ui` (e.g. liquid_glass_widgets,
+      // fl_chart) read the Flutter SDK themes and localizations, which the bridges derive from the
+      // app ones.
+      builder: (context, child) {
+        final iconTheme = IconTheme.of(context);
+        // ignore: deprecated_member_use
+        return MaterialUiCompatibilityBridge(
+          // ignore: deprecated_member_use
+          child: CupertinoUiCompatibilityBridge(
+            // The SDK themes of the bridges set their own icon theme (the Cupertino one with the
+            // primary color): restore the app icon theme.
+            // Pins the app bar buttons of the root navigator's routes and morphs them between
+            // routes on iOS 26.
+            child: GlassNavigationShell(
+              enabled: usePinnedNavBar(context),
+              child: IconTheme(data: iconTheme, child: child!),
+            ),
+          ),
+        );
+      },
+      home: const MainTabScaffold(),
+      navigatorObservers: [rootNavPageRouteObserver, rootNavRouteStackObserver],
+    );
+  }
+}

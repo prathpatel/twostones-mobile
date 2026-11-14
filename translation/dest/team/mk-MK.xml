@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Тим</string>
+  <string name="teams">Тимови</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s членови</item>
+    <item quantity="other">%s членови</item>
+  </plurals>
+  <string name="allTeams">Сите тимови</string>
+  <string name="newTeam">Нов тим</string>
+  <string name="myTeams">Мои тимови</string>
+  <string name="noTeamFound">Не е пронајден тим</string>
+  <string name="joinTeam">Приклучете се на тимот</string>
+  <string name="quitTeam">Откажете се од тимот</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Лидер на тимот</item>
+    <item quantity="other">Лидери на тимот</item>
+  </plurals>
+  <string name="teamRecentMembers">Нови членови на тимот</string>
+  <string name="willBeReviewed">Вашето барање за здружување ќе биде разгледано од лидерот на тимот.</string>
+  <string name="beingReviewed">Вашето барање за здружување се разгледува од лидерот на тимот.</string>
+  <string name="teamBattle">Тимска битка</string>
+  <string name="teamBattleOverview">Битка меѓу повеќе тимови - секој играч збира поени за својот тим</string>
+  <string name="teamTournament">Тимски турнир</string>
+  <string name="teamTournamentOverview">Арена турнир во кој може да учествуваат само играчи од твојот тим</string>
+  <string name="teamsIlead">Тимови кои ги водам</string>
+  <string name="leadersChat">Разговор на лидерите</string>
+</resources>

@@ -1,0 +1,431 @@
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:dartchess/dartchess.dart';
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:lichess_mobile/src/model/broadcast/broadcast.dart';
+import 'package:lichess_mobile/src/model/broadcast/broadcast_preferences.dart';
+import 'package:lichess_mobile/src/model/broadcast/broadcast_providers.dart';
+import 'package:lichess_mobile/src/model/broadcast/broadcast_round_controller.dart';
+import 'package:lichess_mobile/src/model/common/eval.dart';
+import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/theme.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/screen.dart';
+import 'package:lichess_mobile/src/view/broadcast/broadcast_game_screen.dart';
+import 'package:lichess_mobile/src/view/broadcast/broadcast_player_widget.dart';
+import 'package:lichess_mobile/src/view/broadcast/broadcast_round_screen.dart';
+import 'package:lichess_mobile/src/view/broadcast/broadcast_team_screen.dart';
+import 'package:lichess_mobile/src/view/broadcast/broadcast_team_standings_screen.dart';
+import 'package:lichess_mobile/src/view/engine/engine_gauge.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+
+const _kScoreContainerWidth = 75.0;
+const _kTeamNameMaxLines = 3;
+
+const _kGameRowPadding = EdgeInsets.symmetric(vertical: 4.0, horizontal: 16);
+const _kTabletSpacing = 20.0;
+const _kPhoneSpacing = 8.0;
+
+const _kEvalBarWidth = 32.0;
+const _kEvalBarHeight = 14.0;
+const _kEvalBarDividerWidth = _kEvalBarWidth / 50;
+
+class const BroadcastTeamsTab({
+  required final BroadcastRoundId roundId,
+  required final BroadcastTournamentId tournamentId,
+  required final String tournamentSlug,
+  final bool showTeamScores = false,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final teams = ref.watch(broadcastTeamMatchesProvider(roundId));
+
+    return switch (teams) {
+      AsyncData(value: final teams) => BroadcastTeamsList(
+        teams,
+        roundId,
+        tournamentId,
+        tournamentSlug,
+        showTeamScores,
+      ),
+      AsyncError(:final error) => BroadcastRoundTabPlaceholder(
+        Text('Cannot load teams data: $error'),
+      ),
+      _ => const BroadcastRoundTabPlaceholder(CircularProgressIndicator.adaptive()),
+    };
+  }
+}
+
+class const BroadcastTeamsList(
+  final IList<BroadcastTeamMatch> teamMatches,
+  final BroadcastRoundId roundId,
+  final BroadcastTournamentId tournamentId,
+  final String tournamentSlug,
+  final bool showTeamScores,
+) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final round = ref.watch(broadcastRoundControllerProvider(roundId));
+    final showEvaluationGauges = ref.watch(
+      broadcastPreferencesProvider.select((value) => value.showRoundEvaluationGauges),
+    );
+
+    return switch (round) {
+      AsyncData(:final value) => SliverMainAxisGroup(
+        slivers: [
+          if (showTeamScores)
+            SliverSafeArea(
+              bottom: false,
+              sliver: SliverToBoxAdapter(child: _TeamStandingsButton(tournamentId: tournamentId)),
+            ),
+          SliverSafeArea(
+            top: !showTeamScores,
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final match = teamMatches[index];
+                return _TeamMatchCard(
+                  match: match,
+                  games: value.games,
+                  tournamentId: tournamentId,
+                  roundId: roundId,
+                  tournamentSlug: tournamentSlug,
+                  roundSlug: value.round.slug,
+                  title: value.round.name,
+                  showEvaluationGauge: showEvaluationGauges,
+                  customScoring: value.round.customScoring,
+                  showTeamScores: showTeamScores,
+                );
+              }, childCount: teamMatches.length),
+            ),
+          ),
+        ],
+      ),
+      AsyncError(:final error) => BroadcastRoundTabPlaceholder(
+        Text('Cannot load games data: $error'),
+      ),
+      _ => const BroadcastRoundTabPlaceholder(CircularProgressIndicator.adaptive()),
+    };
+  }
+}
+
+class const _TeamStandingsButton({required final BroadcastTournamentId tournamentId})
+    extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListSection(
+      margin: Styles.bodySectionPadding.copyWith(top: 12.0),
+      hasLeading: true,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.leaderboard),
+          trailing: Theme.of(context).platform == TargetPlatform.iOS
+              ? const CupertinoListTileChevron()
+              : null,
+          title: Text(context.l10n.broadcastTeamResults),
+          onTap: () {
+            Navigator.of(context).push(BroadcastTeamStandingsScreen.buildRoute(tournamentId));
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class const _TeamMatchCard({
+  required final BroadcastTeamMatch match,
+  required final BroadcastRoundGames games,
+  required final BroadcastTournamentId tournamentId,
+  required final BroadcastRoundId roundId,
+  required final String tournamentSlug,
+  required final String roundSlug,
+  required final String title,
+  required final bool showEvaluationGauge,
+  required final BroadcastCustomScoring? customScoring,
+  required final bool showTeamScores,
+}) extends StatelessWidget {
+  bool get matchFinished => games.everyEntry((e) => e.value.isOver);
+  BroadcastResult? get matchStatus => matchFinished
+      ? match.team1.points > match.team2.points
+            ? BroadcastResult.whiteWins
+            : match.team1.points < match.team2.points
+            ? BroadcastResult.blackWins
+            : BroadcastResult.draw
+      : null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(4.0),
+      clipBehavior: .hardEdge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ColoredBox(
+            color: ColorScheme.of(context).surfaceDim,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (showTeamScores) {
+                          Navigator.of(context)
+                              .push(BroadcastTeamScreen.buildRoute(tournamentId, match.team1.name));
+                        }
+                      },
+                      child: Text(
+                        match.team1.name,
+                        maxLines: _kTeamNameMaxLines,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: _kScoreContainerWidth,
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          NumberFormat('#.#').format(match.team1.points),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: matchStatus?.colorFor(Side.white, context),
+                          ),
+                        ),
+                        const Text(' - '),
+                        Text(
+                          NumberFormat('#.#').format(match.team2.points),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: matchStatus?.colorFor(Side.black, context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (showTeamScores) {
+                          Navigator.of(context)
+                              .push(BroadcastTeamScreen.buildRoute(tournamentId, match.team2.name));
+                        }
+                      },
+                      child: Text(
+                        match.team2.name,
+                        maxLines: _kTeamNameMaxLines,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          ...match.games.asMap().entries.map((entry) {
+            final gameIndex = entry.key;
+            final teamGame = entry.value;
+            final game = games[teamGame.id];
+            if (game == null) return const SizedBox.shrink();
+
+            return _GameRow(
+              game: game,
+              teamGame: teamGame,
+              index: gameIndex,
+              tournamentId: tournamentId,
+              roundId: roundId,
+              tournamentSlug: tournamentSlug,
+              roundSlug: roundSlug,
+              title: title,
+              showEvaluationGauge: showEvaluationGauge,
+              customScoring: customScoring,
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class const _GameRow({
+  required final BroadcastGame game,
+  required final BroadcastTeamGame teamGame,
+  required final int index,
+  required final BroadcastTournamentId tournamentId,
+  required final BroadcastRoundId roundId,
+  required final String tournamentSlug,
+  required final String roundSlug,
+  required final String title,
+  required final bool showEvaluationGauge,
+  required final BroadcastCustomScoring? customScoring,
+}) extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_GameRow> createState() => _GameRowState();
+}
+
+class _GameRowState() extends ConsumerState<_GameRow> {
+  bool isGameVisible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final whitePlayer = widget.game.players[Side.white];
+    final blackPlayer = widget.game.players[Side.black];
+    final isTablet = isTabletOrLarger(context);
+
+    if (whitePlayer == null || blackPlayer == null) {
+      return const SizedBox.shrink();
+    }
+
+    final team1Player = widget.teamGame.pov == Side.white ? whitePlayer : blackPlayer;
+    final team2Player = widget.teamGame.pov == Side.white ? blackPlayer : whitePlayer;
+
+    final result = _getGameResultTexts(widget.game, widget.teamGame.pov, widget.customScoring);
+
+    final whiteWinningChances =
+        widget.game.isOngoing && (widget.game.cp != null || widget.game.mate != null)
+        ? ExternalEval(cp: widget.game.cp, mate: widget.game.mate).winningChances(Side.white)
+        : null;
+
+    return VisibilityDetector(
+      key: Key('${widget.game.id}'),
+      onVisibilityChanged: (visibilityInfo) {
+        if (visibilityInfo.visibleFraction > 0.1) {
+          if (!isGameVisible && context.mounted) {
+            ref.read(observedGamesControllerProvider(widget.roundId).notifier).add(widget.game.id);
+            setState(() {
+              isGameVisible = true;
+            });
+          }
+        } else {
+          if (isGameVisible && context.mounted) {
+            ref
+                .read(observedGamesControllerProvider(widget.roundId).notifier)
+                .remove(widget.game.id);
+            setState(() {
+              isGameVisible = false;
+            });
+          }
+        }
+      },
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            BroadcastGameScreen.buildRoute(
+              tournamentId: widget.tournamentId,
+              roundId: widget.roundId,
+              gameId: widget.game.id,
+              tournamentSlug: widget.tournamentSlug,
+              roundSlug: widget.roundSlug,
+              title: widget.title,
+            ),
+          );
+        },
+        child: ColoredBox(
+          color: widget.index.isEven ? context.lichessTheme.rowEven : context.lichessTheme.rowOdd,
+          child: Padding(
+            padding: _kGameRowPadding,
+            child: Row(
+              children: [
+                Expanded(
+                  child: BroadcastPlayerWidget(player: team1Player.player, showRating: isTablet),
+                ),
+                SizedBox(width: isTablet ? _kTabletSpacing : _kPhoneSpacing),
+                SizedBox(
+                  width: _kEvalBarWidth,
+                  child: widget.game.isOngoing && widget.showEvaluationGauge
+                      ? whiteWinningChances != null
+                            ? _MiniEvalBar(
+                                whiteWinningChances: whiteWinningChances,
+                                pov: widget.teamGame.pov,
+                              )
+                            : Container(
+                                height: _kEvalBarHeight,
+                                width: _kEvalBarWidth,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(_kEvalBarHeight / 2),
+                                  color: Colors.grey.withValues(alpha: 0.6),
+                                ),
+                              )
+                      : Container(
+                          alignment: Alignment.center,
+                          child: Row(mainAxisAlignment: .center, children: result),
+                        ),
+                ),
+                SizedBox(width: isTablet ? _kTabletSpacing : _kPhoneSpacing),
+                Expanded(
+                  child: BroadcastPlayerWidget(player: team2Player.player, showRating: isTablet),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Text> _getGameResultTexts(
+    BroadcastGame game,
+    Side teamPov,
+    BroadcastCustomScoring? customScoring,
+  ) {
+    if (!game.isOver) {
+      return [const Text('*')];
+    }
+    Text povResult(BroadcastGame game, Side pov, BroadcastCustomScoring? customScoring) {
+      return Text(
+        resultString(customScoring, pov, game.status),
+        style: TextStyle(color: game.status.colorFor(pov, context)),
+      );
+    }
+
+    final team1Result = povResult(game, teamPov, customScoring);
+    final team2Result = povResult(game, teamPov.opposite, customScoring);
+    return [team1Result, const Text('-'), team2Result];
+  }
+}
+
+class const _MiniEvalBar({required final double whiteWinningChances, required final Side pov})
+    extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final whiteBarWidth = _kEvalBarWidth * (whiteWinningChances + 1) / 2;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(_kEvalBarHeight / 2),
+          child: Row(
+            children: [
+              Container(
+                width: pov == Side.white ? whiteBarWidth : _kEvalBarWidth - whiteBarWidth,
+                height: _kEvalBarHeight,
+                color: pov == Side.white
+                    ? EngineGauge.valueColor(context)
+                    : EngineGauge.backgroundColor(context),
+              ),
+              Container(
+                width: pov == Side.white ? _kEvalBarWidth - whiteBarWidth : whiteBarWidth,
+                height: _kEvalBarHeight,
+                color: pov == Side.white
+                    ? EngineGauge.backgroundColor(context)
+                    : EngineGauge.valueColor(context),
+              ),
+            ],
+          ),
+        ),
+
+        Container(width: _kEvalBarDividerWidth, height: _kEvalBarHeight, color: darken(Colors.red)),
+      ],
+    );
+  }
+}

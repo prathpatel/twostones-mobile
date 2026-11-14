@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Jamoa</string>
+  <string name="teams">Jamoalar</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s ta aʻzo</item>
+    <item quantity="other">%s ta aʻzo</item>
+  </plurals>
+  <string name="allTeams">Barça jamoalar</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">Men boşqaradigan jamoalar</string>
+  <string name="newTeam">Yangi jamoa</string>
+  <string name="myTeams">Mening jamoalarim</string>
+  <string name="noTeamFound">Jamoa topilmadi</string>
+  <string name="joinTeam">Jamoaga qöşiliş</string>
+  <string name="quitTeam">Jamoani tark etiş</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Jamoa sardori</item>
+    <item quantity="other">Jamoa sardorlari</item>
+  </plurals>
+  <string name="teamRecentMembers">Yangi aʻzolar</string>
+  <string name="willBeReviewed">Aʻzo böliş sörovingiz jamoa sardori tomonidan körib çiqiladi.</string>
+  <string name="beingReviewed">Aʻzo böliş sörovingiz jamoa sardori tomonidan körib çiqilmoqda.</string>
+  <string name="requestDeclined">Aʻzo böliş sörovingiz jamoa sardori tomonidan rad etildi.</string>
+  <string name="teamBattle">Jamoalar jangi</string>
+  <string name="teamBattleOverview">Jamoalar örtasidagi jang, unda har bir öyinçi öz jamoasi uçun oçko yiğadi</string>
+  <string name="teamTournament">Jamoa turniri</string>
+  <string name="teamTournamentOverview">Faqat jamoangiz aʻzolari iştirok eta oladigan Arena turniri</string>
+  <string name="swissTournamentOverview">Faqat jamoangiz aʻzolari iştirok eta oladigan şveysarça turnir</string>
+  <string name="teamUpdates">Jamoa yangiliklari</string>
+  <string name="subToTeamUpdates">Jamoa yangiliklariga obuna böliş</string>
+  <string name="teamEvents">Jamoa tadbirlari</string>
+  <string name="upcomingTeamEvents">Jamoaning kelgusi tadbirlari</string>
+  <string name="teamsIlead">Men boşqaradigan jamoalar</string>
+  <string name="leadersChat">Sardorlar çati</string>
+  <string name="introduction">Kiriş</string>
+  <string name="entryCode">Jamoaga kiriş kodi</string>
+  <string name="entryCodeDescriptionForLeader">(Ixtiyoriy) Jamoaga qöşiliş uçun yangi aʼzolari bilişi kerak bölgan kiriş kodi.</string>
+  <string name="incorrectEntryCode">Kiriş kodi notöğri.</string>
+  <string name="forumLabel">Jamoa forumi</string>
+  <string name="teamAlreadyExists">Uşbu jamoa allaqaçon mavjud.</string>
+  <string name="upcomingTournaments">Kelgusi turnirlar</string>
+  <string name="completedTourns">Yakunlangan turnirlar</string>
+  <string name="joinLichessVariantTeam">Yangiliklar va tadbirlardan xabardor böliş uçun rasmiy %s jamoasiga qöşiling</string>
+  <string name="innerTeam">Içki jamoa</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="one">%s ta jamoa jangi</item>
+    <item quantity="other">%s ta jamoa jangi</item>
+  </plurals>
+  <plurals name="nbLeadersPerTeam">
+    <item quantity="one">Har bir bitta jamoadan bitta peşqadam</item>
+    <item quantity="other">Har bir bitta jamoadan %s ta peşqadam</item>
+  </plurals>
+</resources>

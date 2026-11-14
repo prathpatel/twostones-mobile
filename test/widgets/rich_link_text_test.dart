@@ -1,0 +1,434 @@
+import 'package:flutter/gestures.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lichess_mobile/src/widgets/rich_link_text.dart';
+import 'package:material_ui/material_ui.dart';
+
+/// Every recognizer in the rendered tree, paired with the text of the span holding it.
+List<(String, GestureRecognizer)> _linksUnder(InlineSpan span) {
+  final links = <(String, GestureRecognizer)>[];
+  if (span is! TextSpan) return links;
+  final recognizer = span.recognizer;
+  if (recognizer != null) links.add((span.text ?? '', recognizer));
+  for (final child in span.children ?? const <InlineSpan>[]) {
+    links.addAll(_linksUnder(child));
+  }
+  return links;
+}
+
+List<GestureRecognizer> _linkRecognizers(WidgetTester tester) {
+  final links = <(String, GestureRecognizer)>[];
+  for (final richText in tester.widgetList<RichText>(find.byType(RichText))) {
+    links.addAll(_linksUnder(richText.text));
+  }
+  return links.map((entry) => entry.$2).toList();
+}
+
+void _noop(LinkableElement _) {}
+
+/// Every leaf [TextSpan] in the rendered tree.
+List<TextSpan> _allSpans(WidgetTester tester) {
+  final spans = <TextSpan>[];
+  void visit(InlineSpan span) {
+    if (span is! TextSpan) return;
+    if (span.children == null) {
+      spans.add(span);
+      return;
+    }
+    span.children!.forEach(visit);
+  }
+
+  for (final richText in tester.widgetList<RichText>(find.byType(RichText))) {
+    visit(richText.text);
+  }
+  return spans;
+}
+
+void main() {
+  group('linkify', () {
+    test('returns empty list for empty string', () {
+      expect(linkify(''), isEmpty);
+    });
+
+    test('returns single TextElement for plain text', () {
+      final result = linkify('hello world');
+      expect(result, hasLength(1));
+      expect(result[0], isA<TextElement>());
+      expect(result[0].text, 'hello world');
+    });
+
+    test('detects http URL', () {
+      final result = linkify('visit http://example.com now');
+      expect(result.any((e) => e is UrlElement), isTrue);
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'http://example.com');
+    });
+
+    test('detects https URL', () {
+      final result = linkify('visit https://example.com now');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'https://example.com');
+    });
+
+    test('detects www URL and adds http protocol', () {
+      final result = linkify('visit www.example.com now');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'http://www.example.com');
+    });
+
+    test('humanizes URL display text', () {
+      final result = linkify('visit https://example.com/path now');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.text, isNot(contains('https://')));
+      expect(url.url, contains('https://'));
+    });
+
+    test('removes trailing period from URL', () {
+      final result = linkify('visit https://example.com. now');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, isNot(endsWith('.')));
+    });
+
+    test('linkifies multiple URLs that end with a period', () {
+      final result = linkify('https://a.com. more text https://b.com. end');
+      final urls = result.whereType<UrlElement>().toList();
+      expect(urls, hasLength(2));
+      expect(urls[0].url, 'https://a.com');
+      expect(urls[1].url, 'https://b.com');
+      final texts = result.whereType<TextElement>().map((e) => e.text).join();
+      expect(texts, contains('more text'));
+      expect(texts, contains('end'));
+    });
+
+    test('preserves balanced parentheses in URLs (e.g. Wikipedia)', () {
+      final result = linkify('http://en.wikipedia.org/wiki/Saw_(film)');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'http://en.wikipedia.org/wiki/Saw_(film)');
+    });
+
+    test('strips unbalanced trailing ) from URL in parentheses', () {
+      final result = linkify('see (https://example.com/path)');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'https://example.com/path');
+      final texts = result.whereType<TextElement>().map((e) => e.text).join();
+      expect(texts, contains(')'));
+    });
+
+    test('strips only unbalanced ) from Wikipedia URL in parentheses', () {
+      final result = linkify('(https://en.wikipedia.org/wiki/Dart_(programming_language))');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'https://en.wikipedia.org/wiki/Dart_(programming_language)');
+    });
+
+    test('strips multiple unbalanced trailing parentheses', () {
+      final result = linkify('(see https://example.com))');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.url, 'https://example.com');
+    });
+
+    test('detects email address', () {
+      final result = linkify('contact me at user@example.com please');
+      final email = result.firstWhere((e) => e is EmailElement) as EmailElement;
+      expect(email.emailAddress, 'user@example.com');
+      expect(email.url, 'mailto:user@example.com');
+    });
+
+    test('detects email with mailto prefix', () {
+      final result = linkify('contact me at mailto:user@example.com please');
+      final email = result.firstWhere((e) => e is EmailElement) as EmailElement;
+      expect(email.emailAddress, 'user@example.com');
+    });
+
+    test('detects @username mention', () {
+      final result = linkify(
+        'hello @user123 how are you?',
+        linkifiers: const [UrlLinkifier(), EmailLinkifier(), UserTagLinkifier()],
+      );
+      final tag = result.firstWhere((e) => e is UserTagElement) as UserTagElement;
+      expect(tag.userTag, '@user123');
+      expect(tag.originText, '@user123');
+    });
+
+    test('detects hyphenated @username mention', () {
+      final result = linkify(
+        'hello @foo-bar how are you?',
+        linkifiers: const [UrlLinkifier(), EmailLinkifier(), UserTagLinkifier()],
+      );
+      final tag = result.firstWhere((e) => e is UserTagElement) as UserTagElement;
+      expect(tag.userTag, '@foo-bar');
+      final texts = result.whereType<TextElement>().map((e) => e.text).join();
+      expect(texts, 'hello  how are you?');
+    });
+
+    test('ends @username mention before trailing punctuation', () {
+      final result = linkify(
+        'ask @foo-bar. or @baz-qux!',
+        linkifiers: const [UrlLinkifier(), EmailLinkifier(), UserTagLinkifier()],
+      );
+      final tags = result.whereType<UserTagElement>().map((e) => e.userTag).toList();
+      expect(tags, ['@foo-bar', '@baz-qux']);
+      final texts = result.whereType<TextElement>().map((e) => e.text).join();
+      expect(texts, 'ask . or !');
+    });
+
+    test('keeps a trailing hyphen in @username mention, like lila', () {
+      final result = linkify(
+        'hello @foo-bar- ok',
+        linkifiers: const [UrlLinkifier(), EmailLinkifier(), UserTagLinkifier()],
+      );
+      final tag = result.firstWhere((e) => e is UserTagElement) as UserTagElement;
+      expect(tag.userTag, '@foo-bar-');
+    });
+
+    test('ignores @ words that cannot be a username', () {
+      final result = linkify(
+        '@a @lichess.org @foo@bar @abcdefghijklmnopqrstuvwxyz12345',
+        linkifiers: const [UrlLinkifier(), EmailLinkifier(), UserTagLinkifier()],
+      );
+      expect(result.any((e) => e is UserTagElement), isFalse);
+    });
+
+    test('detects multiple URLs in text', () {
+      final result = linkify('foo https://a.com bar https://b.com baz');
+      final urls = result.whereType<UrlElement>().toList();
+      expect(urls, hasLength(2));
+    });
+
+    test('detects URL at end of text', () {
+      final result = linkify('visit https://example.com');
+      expect(result.any((e) => e is UrlElement), isTrue);
+    });
+
+    test('detects URL at start of text', () {
+      final result = linkify('https://example.com is great');
+      expect(result.firstWhere((e) => e is UrlElement), isA<UrlElement>());
+    });
+
+    test('text with no links returns single TextElement', () {
+      final result = linkify('plain text without any links');
+      expect(result, hasLength(1));
+      expect(result[0], isA<TextElement>());
+    });
+
+    test('custom linkifiers only', () {
+      final result = linkify(
+        'email user@test.com and @mention',
+        linkifiers: const [EmailLinkifier()],
+      );
+      expect(result.any((e) => e is EmailElement), isTrue);
+      expect(result.any((e) => e is UserTagElement), isFalse);
+    });
+
+    test('no linkifiers returns original text', () {
+      final result = linkify('visit https://example.com', linkifiers: const []);
+      expect(result, hasLength(1));
+      expect(result[0], isA<TextElement>());
+      expect(result[0].text, 'visit https://example.com');
+    });
+
+    test('preserves text before and after URL', () {
+      final result = linkify('before https://example.com after');
+      final texts = result.whereType<TextElement>().toList();
+      expect(texts.any((t) => t.text == 'before '), isTrue);
+      expect(texts.any((t) => t.text == ' after'), isTrue);
+    });
+
+    test('preserves originText on UrlElement', () {
+      final result = linkify('foo www.example.com bar');
+      final url = result.firstWhere((e) => e is UrlElement) as UrlElement;
+      expect(url.originText, 'www.example.com');
+    });
+
+    test('LinkifyElement originText defaults to text', () {
+      final elem = TextElement('hello');
+      expect(elem.originText, 'hello');
+    });
+  });
+
+  group('RichLinkText widget', () {
+    testWidgets('renders plain text', (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: RichLinkText(text: 'hello world')));
+      expect(find.text('hello world'), findsOneWidget);
+    });
+
+    testWidgets('renders multiple elements', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: RichLinkText(text: 'before https://a.com after')),
+      );
+      expect(find.byType(RichText), findsOneWidget);
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      final plainText = richText.text.toPlainText();
+      expect(plainText, contains('before'));
+      expect(plainText, contains('after'));
+    });
+
+    testWidgets('onOpen callback is wired into TextSpan recognizer', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RichLinkText(text: 'tap https://example.com', onOpen: (_) {}),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      final outer = richText.text as TextSpan;
+      final inner = outer.children!.first as TextSpan;
+      final hasRecognizer = inner.children!.any((c) => c is TextSpan && c.recognizer != null);
+      expect(hasRecognizer, isTrue);
+    });
+
+    testWidgets('onOpen is called when a link is tapped', (WidgetTester tester) async {
+      LinkableElement? tappedLink;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: IntrinsicWidth(
+              child: RichLinkText(text: 'https://example.com', onOpen: (link) => tappedLink = link),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('example.com'));
+      expect(tappedLink, isNotNull);
+      expect(tappedLink!.url, 'https://example.com');
+    });
+
+    testWidgets('passes maxLines and overflow', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SizedBox(
+            width: 100,
+            child: RichLinkText(
+              text: 'very long text that should definitely overflow the given width',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      expect(richText.maxLines, 1);
+      expect(richText.overflow, TextOverflow.ellipsis);
+    });
+
+    testWidgets('applies custom style and linkStyle', (WidgetTester tester) async {
+      const customStyle = TextStyle(color: Colors.green, fontSize: 20.0);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: RichLinkText(text: 'plain text no links', style: customStyle),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      final outer = richText.text as TextSpan;
+      final inner = outer.children!.first as TextSpan;
+      expect(inner.children, isNotEmpty);
+      final child = inner.children!.first as TextSpan;
+      expect(child.style, isNotNull);
+    });
+
+    testWidgets('keeps its recognizers when only onOpen changes identity', (
+      WidgetTester tester,
+    ) async {
+      // Every caller passes an inline closure, so a new one arrives on every parent rebuild.
+      // Relinking then throws away three regex passes and a recognizer per link for nothing.
+      Future<void> pumpWith(LinkCallback onOpen) => tester.pumpWidget(
+        MaterialApp(
+          home: RichLinkText(text: 'see https://example.com now', onOpen: onOpen),
+        ),
+      );
+
+      await pumpWith((_) {});
+      final before = _linkRecognizers(tester);
+      expect(before, hasLength(1));
+
+      await pumpWith((_) {});
+
+      expect(_linkRecognizers(tester), orderedEquals(before));
+    });
+
+    testWidgets('applies linkStyle to tappable spans only', (WidgetTester tester) async {
+      const linkStyle = TextStyle(color: Colors.red, fontWeight: FontWeight.bold);
+      const style = TextStyle(color: Colors.green);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: RichLinkText(
+            text: 'hello https://example.com',
+            style: style,
+            linkStyle: linkStyle,
+            onOpen: _noop,
+          ),
+        ),
+      );
+
+      final links = _allSpans(tester);
+      final link = links.firstWhere((span) => span.recognizer != null);
+      final plain = links.firstWhere((span) => span.recognizer == null && span.text!.isNotEmpty);
+
+      expect(link.style, linkStyle);
+      expect(plain.style, style);
+    });
+
+    testWidgets('gives plain text no recognizer', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: RichLinkText(text: 'hello world', onOpen: _noop),
+        ),
+      );
+
+      for (final span in _allSpans(tester)) {
+        expect(span.recognizer, isNull);
+      }
+    });
+
+    testWidgets('appends trailing span after the text in the same paragraph', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: RichLinkText(
+            text: 'https://example.com',
+            trailing: WidgetSpan(
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+              child: Text('12:00', key: Key('timestamp')),
+            ),
+          ),
+        ),
+      );
+
+      // The trailing Text renders a RichText of its own, so take the first.
+      final richText = tester.widget<RichText>(find.byType(RichText).first);
+      // U+FFFC is the placeholder toPlainText substitutes for an inline widget, so this is the
+      // trailing span sitting after the text rather than in a paragraph of its own.
+      expect(richText.text.toPlainText(), 'example.com\uFFFC');
+      expect(find.byKey(const Key('timestamp')), findsOneWidget);
+    });
+
+    testWidgets('calls the latest onOpen after it changes identity', (WidgetTester tester) async {
+      LinkableElement? firstTapped;
+      LinkableElement? secondTapped;
+
+      Future<void> pumpWith(LinkCallback onOpen) => tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: IntrinsicWidth(
+              child: RichLinkText(text: 'https://example.com', onOpen: onOpen),
+            ),
+          ),
+        ),
+      );
+
+      await pumpWith((link) => firstTapped = link);
+      await pumpWith((link) => secondTapped = link);
+
+      // A reused recognizer must still reach the callback the widget currently holds.
+      await tester.tap(find.text('example.com'));
+
+      expect(firstTapped, isNull);
+      expect(secondTapped?.url, 'https://example.com');
+    });
+  });
+}

@@ -1,0 +1,463 @@
+import 'dart:async';
+
+import 'package:chessground/chessground.dart';
+import 'package:dartchess/dartchess.dart';
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/constants.dart';
+import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/model/common/game.dart';
+import 'package:lichess_mobile/src/model/coordinate_training/coordinate_training_controller.dart';
+import 'package:lichess_mobile/src/model/coordinate_training/coordinate_training_preferences.dart';
+import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/utils/screen.dart';
+import 'package:lichess_mobile/src/view/coordinate_training/coordinate_display.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
+import 'package:lichess_mobile/src/widgets/bottom_bar.dart';
+import 'package:lichess_mobile/src/widgets/buttons.dart';
+import 'package:lichess_mobile/src/widgets/filter.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/settings.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const CoordinateTrainingScreen({super.key}) extends StatelessWidget {
+  static Route<dynamic> buildRoute() {
+    return buildScreenRoute(screen: const CoordinateTrainingScreen());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PlatformScaffold(
+      extendBodyBehindAppBar: false,
+      appBar: PlatformAppBar(
+        title: Text(context.l10n.coordinatesCoordinateTraining),
+        actions: [
+          SemanticIconButton(
+            icon: const Icon(Icons.settings),
+            semanticsLabel: context.l10n.settingsSettings,
+            onPressed: () => showAdaptiveBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              builder: (BuildContext context) => const _CoordinateTrainingMenu(),
+            ),
+          ),
+        ],
+      ),
+      body: const _Body(),
+    );
+  }
+}
+
+class const _Body() extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_Body> createState() => _BodyState();
+}
+
+class _BodyState() extends ConsumerState<_Body> {
+  Square? highlightLastGuess;
+
+  Timer? highlightTimer;
+
+  @override
+  void dispose() {
+    super.dispose();
+    highlightTimer?.cancel();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trainingState = ref.watch(coordinateTrainingControllerProvider);
+    final trainingPrefs = ref.watch(coordinateTrainingPreferencesProvider);
+
+    final IMap<Square, SquareHighlight> squareHighlights = <Square, SquareHighlight>{
+      if (trainingState.trainingActive)
+        if (trainingPrefs.mode == TrainingMode.findSquare) ...{
+          if (highlightLastGuess != null) ...{
+            highlightLastGuess!: SquareHighlight(
+              details: HighlightDetails(
+                solidColor:
+                    (trainingState.lastGuess == Guess.correct
+                            ? context.lichessColors.green
+                            : context.lichessColors.red)
+                        .withValues(alpha: 0.5),
+              ),
+            ),
+          },
+        } else ...{
+          trainingState.currentCoord!: SquareHighlight(
+            details: HighlightDetails(
+              solidColor: context.lichessColors.green.withValues(alpha: 0.5),
+            ),
+          ),
+        },
+    }.lock;
+
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final aspectRatio = constraints.biggest.aspectRatio;
+
+                final isTablet = isTabletOrLarger(context);
+                final direction = aspectRatio > 1 ? Axis.horizontal : Axis.vertical;
+                // Like the analysis board, the board never spans the whole screen width.
+                final boardPadding = isTablet || direction == Axis.horizontal
+                    ? const EdgeInsets.all(kTabletBoardTableSidePadding)
+                    : isShortVerticalScreen(context)
+                    ? const EdgeInsets.symmetric(horizontal: kShortScreenBoardSideMargin)
+                    : const EdgeInsets.symmetric(horizontal: kPhoneBoardSideMargin);
+                final boardSize = constraints.biggest.shortestSide - boardPadding.horizontal;
+
+                return Flex(
+                  direction: direction,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Padding(
+                      padding: boardPadding,
+                      child: Column(
+                        children: [
+                          _TimeBar(
+                            maxWidth: boardSize,
+                            timeFractionElapsed: trainingState.timeFractionElapsed,
+                            color: trainingState.lastGuess == Guess.incorrect
+                                ? context.lichessColors.red
+                                : context.lichessColors.green,
+                          ),
+                          _TrainingBoard(
+                            boardSize: boardSize,
+                            orientation: trainingState.orientation,
+                            squareHighlights: squareHighlights,
+                            onGuess: _onGuess,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (trainingState.trainingActive)
+                      _ScoreAndTrainingButton(
+                        scoreSize: boardSize / 8,
+                        score: trainingState.score,
+                        button: FilledButton.tonal(
+                          onPressed: ref
+                              .read(coordinateTrainingControllerProvider.notifier)
+                              .abortTraining,
+                          child: const Text('Abort Training'),
+                        ),
+                      )
+                    else if (trainingState.lastScore != null)
+                      _ScoreAndTrainingButton(
+                        scoreSize: boardSize / 8,
+                        score: trainingState.lastScore!,
+                        button: FilledButton(
+                          onPressed: () {
+                            ref
+                                .read(coordinateTrainingControllerProvider.notifier)
+                                .startTraining(trainingPrefs.timeChoice.duration);
+                          },
+                          child: Text(context.l10n.coordinatesStartTraining),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: Center(
+                          child: FilledButton(
+                            onPressed: () {
+                              ref
+                                  .read(coordinateTrainingControllerProvider.notifier)
+                                  .startTraining(trainingPrefs.timeChoice.duration);
+                            },
+                            child: Text(context.l10n.coordinatesStartTraining),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+          if (!trainingState.trainingActive)
+            BottomBar(
+              cupertinoGlass: true,
+              children: [
+                BottomBarButton(
+                  label: context.l10n.menu,
+                  onTap: () => _coordinateTrainingSettingsBuilder(context),
+                  icon: Icons.tune,
+                ),
+                BottomBarButton(
+                  icon: Icons.info_outline,
+                  label: context.l10n.aboutX('Coordinate Training'),
+                  onTap: () => _showCoordinateTrainingInfo(context),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _onGuess(Square square) {
+    ref.read(coordinateTrainingControllerProvider.notifier).guessCoordinate(square);
+
+    setState(() {
+      highlightLastGuess = square;
+
+      highlightTimer?.cancel();
+      highlightTimer = Timer(const Duration(milliseconds: 200), () {
+        setState(() {
+          highlightLastGuess = null;
+        });
+      });
+    });
+  }
+}
+
+class const _TimeBar({
+  required final double maxWidth,
+  required final double? timeFractionElapsed,
+  required final Color color,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: maxWidth * (timeFractionElapsed ?? 0.0),
+        height: 15.0,
+        child: ColoredBox(color: color),
+      ),
+    );
+  }
+}
+
+class const _CoordinateTrainingMenu() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trainingPrefs = ref.watch(coordinateTrainingPreferencesProvider);
+
+    return BottomSheetScrollableContainer(
+      children: [
+        ListSection(
+          materialFilledCard: true,
+          header: SettingsSectionTitle(context.l10n.preferencesDisplay),
+          children: [
+            SwitchSettingTile(
+              title: Text(context.l10n.coordinatesShowCoordinates),
+              value: trainingPrefs.showCoordinates,
+              onChanged: ref
+                  .read(coordinateTrainingPreferencesProvider.notifier)
+                  .setShowCoordinates,
+            ),
+            SwitchSettingTile(
+              title: const Text('Show Pieces'),
+              value: trainingPrefs.showPieces,
+              onChanged: ref.read(coordinateTrainingPreferencesProvider.notifier).setShowPieces,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class const _ScoreAndTrainingButton({
+  required final double scoreSize,
+  required final int score,
+  required final Widget button,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trainingState = ref.watch(coordinateTrainingControllerProvider);
+
+    return Expanded(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _Score(
+            score: score,
+            size: scoreSize,
+            color: trainingState.lastGuess == Guess.incorrect
+                ? context.lichessColors.red
+                : context.lichessColors.green,
+          ),
+          button,
+        ],
+      ),
+    );
+  }
+}
+
+class const _Score({
+  required final double size,
+  required final Color color,
+  required final int score,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10.0, left: 10.0, right: 10.0),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.all(Radius.circular(4.0)),
+          color: color,
+        ),
+        width: size,
+        height: size,
+        child: Center(
+          child: Text(
+            score.toString(),
+            style: Styles.bold.copyWith(color: Colors.white, fontSize: 24.0),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class const SettingsBottomSheet() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trainingPrefs = ref.watch(coordinateTrainingPreferencesProvider);
+
+    return BottomSheetScrollableContainer(
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        Filter(
+          filterName: context.l10n.side,
+          filterType: FilterType.singleChoice,
+          choices: SideChoice.values,
+          showCheckmark: false,
+          choiceSelected: (choice) => trainingPrefs.sideChoice == choice,
+          choiceLabel: (choice) => Text(choice.label(context.l10n)),
+          onSelected: (choice, selected) {
+            if (selected) {
+              ref.read(coordinateTrainingPreferencesProvider.notifier).setSideChoice(choice);
+            }
+          },
+        ),
+        const SizedBox(height: 12.0),
+        const PlatformDivider(thickness: 1, indent: 0),
+        const SizedBox(height: 12.0),
+        Filter(
+          filterName: context.l10n.time,
+          filterType: FilterType.singleChoice,
+          choices: TimeChoice.values,
+          showCheckmark: false,
+          choiceSelected: (choice) => trainingPrefs.timeChoice == choice,
+          choiceLabel: (choice) => choice.label(context.l10n),
+          onSelected: (choice, selected) {
+            if (selected) {
+              ref.read(coordinateTrainingPreferencesProvider.notifier).setTimeChoice(choice);
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class const _TrainingBoard({
+  required final double boardSize,
+  required final Side orientation,
+  required final void Function(Square) onGuess,
+  required final IMap<Square, SquareHighlight> squareHighlights,
+}) extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_TrainingBoard> createState() => _TrainingBoardState();
+}
+
+class _TrainingBoardState() extends ConsumerState<_TrainingBoard> {
+  @override
+  Widget build(BuildContext context) {
+    final boardPrefs = ref.watch(boardPreferencesProvider);
+    final trainingPrefs = ref.watch(coordinateTrainingPreferencesProvider);
+    final trainingState = ref.watch(coordinateTrainingControllerProvider);
+
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            StaticChessboard(
+              size: widget.boardSize,
+              fen: trainingPrefs.showPieces ? kInitialFEN : kEmptyFEN,
+              squareHighlights: widget.squareHighlights.unlock,
+              orientation: widget.orientation,
+              settings: StaticChessboardSettings.fromBoardSettings(
+                boardPrefs
+                    .toBoardSettings(Variant.standard, appBrightness: Theme.of(context).brightness)
+                    .copyWith(
+                      enableCoordinates: trainingPrefs.showCoordinates,
+                      borderRadius: Styles.boardBorderRadius,
+                      boxShadow: boardShadows,
+                    ),
+              ),
+              onTouchedSquare: (square) {
+                if (trainingState.trainingActive && trainingPrefs.mode == TrainingMode.findSquare) {
+                  widget.onGuess(square);
+                }
+              },
+            ),
+            if (trainingState.trainingActive && trainingPrefs.mode == TrainingMode.findSquare)
+              CoordinateDisplay(
+                currentCoord: trainingState.currentCoord!,
+                nextCoord: trainingState.nextCoord!,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _coordinateTrainingSettingsBuilder(BuildContext context) {
+  return showAdaptiveBottomSheet<void>(
+    context: context,
+    builder: (BuildContext context) => const SettingsBottomSheet(),
+  );
+}
+
+Future<void> _showCoordinateTrainingInfo(BuildContext context) {
+  return showAdaptiveNavigationSheet<void>(
+    context: context,
+    builder: (context) => PlatformScaffold(
+      appBar: PlatformAppBar(
+        title: Text(context.l10n.aboutX(context.l10n.coordinatesCoordinateTraining)),
+      ),
+      body: ListView(
+        children: [
+          Padding(
+            padding: Styles.bodyPadding,
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: '${context.l10n.coordinatesKnowingTheChessBoard}\n'),
+                  TextSpan(text: '  • ${context.l10n.coordinatesMostChessCourses}\n'),
+                  TextSpan(text: '  • ${context.l10n.coordinatesTalkToYourChessFriends}\n'),
+                  TextSpan(
+                    text: '  • ${context.l10n.coordinatesYouCanAnalyseAGameMoreEffectively}\n',
+                  ),
+                  const TextSpan(text: '\n'),
+                  TextSpan(
+                    text: '${context.l10n.coordinatesFindSquare}\n',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(text: '${context.l10n.coordinatesACoordinateAppears}\n'),
+                  TextSpan(text: '${context.l10n.coordinatesYouHaveThirtySeconds}\n'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}

@@ -1,0 +1,992 @@
+import 'dart:async';
+
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/experimental/mutation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/binding/binding.dart';
+import 'package:lichess_mobile/src/model/account/account_repository.dart';
+import 'package:lichess_mobile/src/model/account/home_preferences.dart';
+import 'package:lichess_mobile/src/model/account/home_widgets.dart';
+import 'package:lichess_mobile/src/model/account/ongoing_game.dart';
+import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
+import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
+import 'package:lichess_mobile/src/model/blog/blog.dart';
+import 'package:lichess_mobile/src/model/blog/blog_repository.dart';
+import 'package:lichess_mobile/src/model/challenge/challenges.dart';
+import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/correspondence/correspondence_game_storage.dart';
+import 'package:lichess_mobile/src/model/correspondence/offline_correspondence_game.dart';
+import 'package:lichess_mobile/src/model/game/game_history.dart';
+import 'package:lichess_mobile/src/model/message/message_repository.dart';
+import 'package:lichess_mobile/src/model/relation/following_user.dart';
+import 'package:lichess_mobile/src/model/tournament/tournament.dart';
+import 'package:lichess_mobile/src/model/tournament/tournament_providers.dart';
+import 'package:lichess_mobile/src/model/user/user.dart';
+import 'package:lichess_mobile/src/network/connectivity.dart';
+import 'package:lichess_mobile/src/styles/lichess_icons.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/tab_navigation.dart';
+import 'package:lichess_mobile/src/utils/focus_detector.dart';
+import 'package:lichess_mobile/src/utils/image.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/utils/screen.dart';
+import 'package:lichess_mobile/src/view/account/account_menu.dart';
+import 'package:lichess_mobile/src/view/account/profile_screen.dart';
+import 'package:lichess_mobile/src/view/auth/sign_in_error.dart';
+import 'package:lichess_mobile/src/view/auth/sign_in_options.dart';
+import 'package:lichess_mobile/src/view/correspondence/offline_correspondence_game_screen.dart';
+import 'package:lichess_mobile/src/view/game/game_screen.dart';
+import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
+import 'package:lichess_mobile/src/view/game/offline_correspondence_games_screen.dart';
+import 'package:lichess_mobile/src/view/home/blog_carousel.dart';
+import 'package:lichess_mobile/src/view/home/following_carousel.dart';
+import 'package:lichess_mobile/src/view/home/games_carousel.dart';
+import 'package:lichess_mobile/src/view/message/conversation_screen.dart';
+import 'package:lichess_mobile/src/view/play/ongoing_games_screen.dart';
+import 'package:lichess_mobile/src/view/play/play_bottom_sheet.dart';
+import 'package:lichess_mobile/src/view/play/play_menu.dart';
+import 'package:lichess_mobile/src/view/play/quick_game_matrix.dart';
+import 'package:lichess_mobile/src/view/tournament/tournament_list_screen.dart';
+import 'package:lichess_mobile/src/view/user/challenge_requests_screen.dart';
+import 'package:lichess_mobile/src/view/user/recent_games.dart';
+import 'package:lichess_mobile/src/widgets/buttons.dart';
+import 'package:lichess_mobile/src/widgets/feedback.dart';
+import 'package:lichess_mobile/src/widgets/haptic_refresh_indicator.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/misc.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/server_outage_display.dart';
+import 'package:lichess_mobile/src/widgets/shimmer.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// Number of cold app starts before hiding the home customization tip.
+const kColdAppStartsHideCustomizationTipThreshold = 5;
+
+class const HomeTabScreen({super.key, final bool editModeEnabled = false})
+    extends ConsumerStatefulWidget {
+  static Route<dynamic> buildRoute({bool editModeEnabled = false}) {
+    return buildScreenRoute(
+      screen: HomeTabScreen(editModeEnabled: editModeEnabled),
+      // Editing the home widgets is a full screen task, closed with its OK button.
+      fullscreenDialog: editModeEnabled,
+    );
+  }
+
+  @override
+  ConsumerState<HomeTabScreen> createState() => _HomeScreenState();
+}
+
+class const _IsEditingHome({required super.child, required final bool isEditingWidgets})
+    extends InheritedWidget {
+  @override
+  bool updateShouldNotify(_IsEditingHome oldWidget) {
+    return isEditingWidgets != oldWidget.isEditingWidgets;
+  }
+
+  static _IsEditingHome? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<_IsEditingHome>();
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty<bool>('isEditingWidgets', isEditingWidgets));
+  }
+}
+
+const String kHideHomeWidgetCustomizationTip = 'app_hide_home_widget_customization_tip';
+
+class _HomeScreenState() extends ConsumerState<HomeTabScreen> {
+  ImageColorWorker? _worker;
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
+
+  DateTime? _focusLostAt;
+
+  bool wasOnline = true;
+  bool hasRefreshed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImageWorker();
+  }
+
+  Future<void> _loadImageWorker() async {
+    final worker = await ref.read(imageWorkerFactoryProvider).spawn();
+    if (mounted) {
+      setState(() {
+        _worker = worker;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(connectivityChangesProvider, (_, connectivity) {
+      // Refresh the data only once if it was offline and is now online
+      if (!connectivity.isRefreshing && connectivity.hasValue) {
+        final isNowOnline = connectivity.value!.isOnline;
+
+        if (!hasRefreshed && !wasOnline && isNowOnline) {
+          hasRefreshed = true;
+          _refreshData(isOnline: isNowOnline);
+        }
+
+        wasOnline = isNowOnline;
+      }
+    });
+
+    // Watched directly rather than through [isDeviceOnlineProvider], because
+    // this screen shows a spinner until the connectivity status is known.
+    return ref
+        .watch(connectivityChangesProvider)
+        .when(
+          skipLoadingOnReload: true,
+          data: (connectivity) {
+            final isOnline = connectivity.isOnline;
+            final authUser = ref.watch(authControllerProvider);
+            final unreadLichessMessage = ref.watch(unreadMessagesProvider).value?.lichess == true;
+            final ongoingGames = ref.watch(ongoingGamesProvider);
+            final offlineCorresGames = ref.watch(offlineOngoingCorrespondenceGamesProvider);
+            final recentGames = ref.watch(myRecentGamesProvider);
+            final nbOfGames = ref.watch(userNumberOfGamesProvider(null)).value ?? 0;
+            final isTablet = isTabletOrLarger(context);
+
+            // Everything the lichess server provides is unavailable both when the
+            // device is offline and when the server itself is down. Widgets backed
+            // by local data (recent games, offline correspondence games) keep
+            // working in either case, so only the server-backed ones are hidden,
+            // and a [ServerOutageDisplay] is shown in their place during an outage.
+            final isServerUnavailable = ref
+                .watch(lichessConnectionStatusProvider)
+                .isServerUnavailable;
+            final hasServerContent = isOnline && !isServerUnavailable;
+            final showOutage = isServerUnavailable && !widget.editModeEnabled;
+
+            final featuredTournaments = hasServerContent
+                ? ref.watch(featuredTournamentsProvider)
+                : const AsyncValue.data(IListConst<LightTournament>([]));
+            final blogPosts = hasServerContent
+                ? ref.watch(blogCarouselProvider)
+                : const AsyncValue.data(IListConst<BlogPost>([]));
+            final followingAsync = authUser != null && hasServerContent
+                ? ref.watch(followingCarouselProvider)
+                : const AsyncValue.data(IListConst<FollowingUser>([]));
+
+            // Widgets whose content can be empty should not show a checkbox in
+            // edit mode when there is nothing to display next to it.
+            final hasFeaturedTournaments = featuredTournaments.maybeWhen(
+              data: (tournaments) => tournaments.any((t) => t.isSupportedInApp),
+              orElse: () => true,
+            );
+            final hasFollowing = followingAsync.maybeWhen(
+              data: (following) => following.isNotEmpty,
+              orElse: () => true,
+            );
+
+            final isKidMode = ref.watch(kidModeProvider).value ?? false;
+
+            // Show the welcome screen if not logged in and there are no recent games and no stored games
+            // (i.e. first installation, or the user has never played a game)
+            final shouldShowWelcomeScreen =
+                authUser == null &&
+                recentGames.maybeWhen(data: (data) => data.isEmpty, orElse: () => false);
+
+            List<Widget> widgets;
+
+            if (shouldShowWelcomeScreen) {
+              final welcomeWidgets = [
+                if (showOutage) const ServerOutageDisplay(),
+                if (!widget.editModeEnabled) ...[
+                  Padding(
+                    padding: Styles.bodySectionPadding,
+                    child: LichessMessage(style: TextTheme.of(context).bodyLarge),
+                  ),
+                  const SizedBox(height: 8.0),
+                  if (authUser == null) ...[
+                    const Center(child: _SignInWidget()),
+                    const SizedBox(height: 16.0),
+                  ],
+                  if (Theme.of(context).platform != TargetPlatform.iOS &&
+                      (authUser == null || authUser.user.isPatron != true)) ...[
+                    Center(
+                      child: FilledButton.tonal(
+                        onPressed: () {
+                          launchUrl(Uri.parse('https://lichess.org/patron'));
+                        },
+                        child: Text(context.l10n.patronDonate),
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+                  ],
+                  Center(
+                    child: FilledButton.tonal(
+                      onPressed: () {
+                        launchUrl(Uri.parse('https://lichess.org/about'));
+                      },
+                      child: Text(context.l10n.aboutX('Lichess...')),
+                    ),
+                  ),
+                  const _HomeCustomizationTip(),
+                ],
+              ];
+
+              widgets = [
+                if (isTablet)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...welcomeWidgets,
+                            const SizedBox(height: 32.0),
+                            const _TabletCreateAGameSection(),
+                          ],
+                        ),
+                      ),
+                      Expanded(child: FeaturedTournamentsWidget(featured: featuredTournaments)),
+                    ],
+                  )
+                else ...[
+                  ...welcomeWidgets,
+                  if (hasServerContent)
+                    const _EditableWidget(
+                      widget: HomeEditableWidget.quickPairing,
+                      shouldShow: true,
+                      child: Padding(padding: Styles.bodySectionPadding, child: QuickGameMatrix()),
+                    ),
+                  _EditableWidget(
+                    widget: HomeEditableWidget.featuredTournaments,
+                    shouldShow: hasServerContent && hasFeaturedTournaments,
+                    child: FeaturedTournamentsWidget(featured: featuredTournaments),
+                  ),
+                  if (_worker != null && !isKidMode)
+                    _EditableWidget(
+                      widget: HomeEditableWidget.blogCarousel,
+                      shouldShow: hasServerContent,
+                      child: _BlogCarouselWidget(blogPosts, _worker!),
+                    ),
+                ],
+              ];
+            } else if (isTablet) {
+              widgets = [
+                if (!widget.editModeEnabled) ...[const _HomeCustomizationTip()],
+                if (showOutage) const ServerOutageDisplay(),
+                if (hasServerContent)
+                  _EditableWidget(
+                    widget: HomeEditableWidget.perfCards,
+                    shouldShow: authUser != null,
+                    child: const AccountPerfCards(padding: Styles.bodySectionPadding),
+                  ),
+                _EditableWidget(
+                  widget: HomeEditableWidget.friends,
+                  shouldShow: authUser != null && hasServerContent && hasFollowing,
+                  child: FollowingCarousel(followingAsync),
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Flexible(
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 8.0),
+                          const _TabletCreateAGameSection(),
+                          if (hasServerContent)
+                            _OngoingGamesPreview(ongoingGames, maxGamesToShow: 5)
+                          else
+                            _OfflineCorrespondencePreview(offlineCorresGames, maxGamesToShow: 5),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.max,
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8.0),
+                          FeaturedTournamentsWidget(featured: featuredTournaments),
+                          if (_worker != null && !isKidMode)
+                            _EditableWidget(
+                              widget: HomeEditableWidget.blogCarousel,
+                              shouldShow: hasServerContent,
+                              child: _BlogCarouselWidget(blogPosts, _worker!),
+                            ),
+                          RecentGamesWidget(
+                            recentGames: recentGames,
+                            nbOfGames: nbOfGames,
+                            user: null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ];
+            } else {
+              final hasOngoingGames =
+                  (hasServerContent &&
+                      ongoingGames.maybeWhen(
+                        data: (data) => data.isNotEmpty,
+                        orElse: () => false,
+                      )) ||
+                  (!hasServerContent &&
+                      offlineCorresGames.maybeWhen(
+                        data: (data) => data.isNotEmpty,
+                        orElse: () => false,
+                      ));
+              widgets = [
+                if (!widget.editModeEnabled) ...[const _HomeCustomizationTip()],
+                if (showOutage) const ServerOutageDisplay(),
+                _EditableWidget(
+                  widget: HomeEditableWidget.perfCards,
+                  shouldShow: authUser != null && hasServerContent,
+                  child: const AccountPerfCards(padding: Styles.bodySectionPadding),
+                ),
+                _EditableWidget(
+                  widget: HomeEditableWidget.friends,
+                  shouldShow: authUser != null && hasServerContent && hasFollowing,
+                  child: FollowingCarousel(followingAsync),
+                ),
+                _EditableWidget(
+                  widget: HomeEditableWidget.quickPairing,
+                  shouldShow: hasServerContent,
+                  child: const Padding(
+                    padding: Styles.bodySectionPadding,
+                    child: QuickGameMatrix(),
+                  ),
+                ),
+                _EditableWidget(
+                  widget: HomeEditableWidget.ongoingGames,
+                  shouldShow: hasOngoingGames,
+                  child: hasServerContent
+                      ? _OngoingGamesCarousel(ongoingGames, maxGamesToShow: 20)
+                      : _OfflineCorrespondenceCarousel(offlineCorresGames, maxGamesToShow: 20),
+                ),
+                _EditableWidget(
+                  widget: HomeEditableWidget.featuredTournaments,
+                  shouldShow: hasServerContent && hasFeaturedTournaments,
+                  child: FeaturedTournamentsWidget(featured: featuredTournaments),
+                ),
+                if (_worker != null && !isKidMode)
+                  _EditableWidget(
+                    widget: HomeEditableWidget.blogCarousel,
+                    shouldShow: hasServerContent,
+                    child: _BlogCarouselWidget(blogPosts, _worker!),
+                  ),
+                _EditableWidget(
+                  widget: HomeEditableWidget.recentGames,
+                  shouldShow: true,
+                  child: RecentGamesWidget(
+                    recentGames: recentGames,
+                    nbOfGames: nbOfGames,
+                    user: null,
+                  ),
+                ),
+              ];
+            }
+
+            final content = ListView(
+              controller: homeScrollController,
+              children: [if (unreadLichessMessage) const _LichessMessageBanner(), ...widgets],
+            );
+
+            return FocusDetector(
+              onFocusLost: () {
+                _focusLostAt = DateTime.now();
+              },
+              onFocusRegained: () {
+                if (context.mounted && _focusLostAt != null) {
+                  final duration = DateTime.now().difference(_focusLostAt!);
+                  if (duration.inSeconds < 10) {
+                    return;
+                  }
+                  _refreshData(isOnline: isOnline);
+                }
+              },
+              child: _IsEditingHome(
+                isEditingWidgets: widget.editModeEnabled,
+                child: PlatformScaffold(
+                  appBar: widget.editModeEnabled
+                      ? PlatformAppBar(
+                          title: Text(context.l10n.mobileSettingsHomeWidgets),
+                          leading: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text(context.l10n.ok),
+                          ),
+                          leadingWidth: 80.0,
+                          automaticallyImplyLeading: false,
+                        )
+                      : PlatformAppBar(
+                          // A greeting without a name when logged out.
+                          title: _GreetingWidget(authUser?.user, isOnline: isOnline),
+                          centerTitle: false,
+                          actions: const [_ChallengeScreenButton(), AccountMenuButton()],
+                        ),
+                  body: widget.editModeEnabled
+                      ? content
+                      : HapticRefreshIndicator(
+                          key: _refreshKey,
+                          // Not gated on the connectivity status: the device may be marked
+                          // offline while its network is back, and the responses to these
+                          // requests are what tell the connectivity check to run again.
+                          onRefresh: () => _refreshData(isOnline: true),
+                          child: content,
+                        ),
+                  floatingActionButton: widget.editModeEnabled || isTablet
+                      ? null
+                      : const FloatingPlayButton(),
+                ),
+              ),
+            );
+          },
+          error: (_, _) => const CenterLoadingIndicator(),
+          loading: () => const CenterLoadingIndicator(),
+        );
+  }
+
+  Future<void> _refreshData({required bool isOnline}) async {
+    try {
+      await Future.wait([
+        ref.refresh(myRecentGamesProvider.future),
+        if (isOnline) ref.refresh(challengesProvider.future),
+        if (isOnline) ref.refresh(unreadMessagesProvider.future),
+        if (isOnline) ref.refresh(accountProvider.future),
+        if (isOnline) ref.refresh(ongoingGamesProvider.future),
+        if (isOnline) ref.refresh(featuredTournamentsProvider.future),
+        if (isOnline) ref.refresh(followingCarouselProvider.future),
+      ]);
+    } catch (_) {
+      // Refreshing while the server is unavailable is expected to fail. Each
+      // provider surfaces its own error, and the failed responses are what keep
+      // the server status up to date, so there is nothing to do here.
+    }
+  }
+}
+
+class const _LichessMessageBanner() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.tertiaryContainer,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context)
+              .pushHidingTabBar(
+                ConversationScreen.buildRoute(
+                  user: const LightUser(id: UserId('lichess'), name: 'lichess'),
+                ),
+              )
+              .then((_) => ref.invalidate(unreadMessagesProvider));
+        },
+        child: Padding(
+          padding: Styles.bodyPadding,
+          child: Column(
+            children: [
+              Text(
+                context.l10n.showUnreadLichessMessage,
+                style: TextStyle(
+                  color: theme.colorScheme.onTertiaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4.0),
+              Text(
+                context.l10n.readTheMessage,
+                style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class const _SignInWidget() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signInState = ref.watch(signInMutation);
+
+    ref.listen(signInMutation, (_, next) => showSignInErrorSnackBar(context, next));
+
+    return FilledButton(
+      onPressed: switch (signInState) {
+        MutationPending() => null,
+        _ => () => showSignInOptions(context, ref),
+      },
+      child: Text(context.l10n.signIn),
+    );
+  }
+}
+
+/// A widget that can be enabled or disabled by the user.
+///
+/// This widget is used to show or hide certain sections of the home screen.
+///
+/// The [homePreferencesProvider] provides a list of enabled widgets.
+///
+/// * The [widget] parameter is the widget that can be enabled or disabled.
+///
+/// * The [shouldShow] parameter is useful when the widget should be shown only
+///   when certain conditions are met. For example, we only want to show the quick
+///   pairing matrix when the user is online.
+///   This parameter is only active when the user is not in edit mode, as we
+///   always want to display the widget in edit mode.
+class const _EditableWidget({
+  required final Widget child,
+  required final HomeEditableWidget widget,
+  required final bool shouldShow,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final disabledWidgets = ref.watch(homePreferencesProvider).disabledWidgets;
+    final isEditing = _IsEditingHome.maybeOf(context)?.isEditingWidgets ?? false;
+    final isEnabled = !disabledWidgets.contains(widget);
+
+    if (!shouldShow) {
+      return const SizedBox.shrink();
+    }
+
+    return isEditing
+        ? Row(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Checkbox.adaptive(
+                      value: isEnabled,
+                      onChanged: widget.alwaysEnabled
+                          ? null
+                          : (_) {
+                              ref.read(homePreferencesProvider.notifier).toggleWidget(widget);
+                            },
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: IgnorePointer(ignoring: isEditing, child: child),
+              ),
+              if (widget == HomeEditableWidget.quickPairing)
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () => showTimeControlPicker(context, ref),
+                ),
+            ],
+          )
+        : widget.alwaysEnabled || isEnabled
+        ? child
+        : const SizedBox.shrink();
+  }
+}
+
+class _IsDayTimeNotifier() extends Notifier<bool> {
+  Timer? _timer;
+
+  @override
+  bool build() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      ref.invalidateSelf();
+    });
+
+    ref.onDispose(() {
+      _timer?.cancel();
+    });
+
+    final hour = DateTime.now().hour;
+    return hour >= 6 && hour < 18; // Daytime is between 6 AM and 6 PM
+  }
+}
+
+final _isDayTimeProvider = NotifierProvider.autoDispose<_IsDayTimeNotifier, bool>(
+  _IsDayTimeNotifier.new,
+  name: '_isDayTimeProvider',
+);
+
+/// The greeting of the user, as the app bar title, which opens the profile when logged in.
+/// The greeting of the home app bar, with an "Offline" subtitle while the device is offline.
+class const _GreetingWidget(
+  /// Null when logged out: the greeting has no name.
+  final LightUser? user, {
+  required final bool isOnline,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDayTime = ref.watch(_isDayTimeProvider);
+    final user = this.user;
+    final text = user != null
+        ? (isDayTime ? context.l10n.mobileGoodDay : context.l10n.mobileGoodEvening)(user.name)
+        : isDayTime
+        ? context.l10n.mobileGoodDayWithoutName
+        : context.l10n.mobileGoodEveningWithoutName;
+    final greeting = '${isDayTime ? '☀️' : '🌙'} $text';
+
+    void openProfile() {
+      Navigator.of(context).push(ProfileScreen.buildRoute());
+    }
+
+    return InkWell(
+      onTap: user != null ? openProfile : null,
+      borderRadius: const BorderRadius.all(Radius.circular(8.0)),
+      child: Column(
+        mainAxisSize: .min,
+        crossAxisAlignment: .start,
+        children: [
+          Text(
+            greeting,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            // On iOS, smaller than the large title of the other tabs, so that the greeting fits.
+            style: Theme.of(context).platform == TargetPlatform.iOS
+                ? TextTheme.of(context).titleLarge
+                : null,
+          ),
+          if (!isOnline)
+            Text(
+              context.l10n.noNetwork,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextTheme.of(context).bodySmall
+                  ?.copyWith(color: textShade(context, Styles.subtitleOpacity)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class const _TabletCreateAGameSection() extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _EditableWidget(
+          widget: HomeEditableWidget.quickPairing,
+          shouldShow: true,
+          child: Padding(padding: Styles.bodySectionPadding, child: QuickGameMatrix()),
+        ),
+        PlayMenu(),
+      ],
+    );
+  }
+}
+
+class const _BlogCarouselWidget(
+  final AsyncValue<IList<BlogPost>> posts,
+  final ImageColorWorker worker,
+) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: Styles.verticalBodyPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: Styles.horizontalBodyPadding,
+            child: ListSectionHeader(title: Text(context.l10n.blog)),
+          ),
+          switch (posts) {
+            AsyncData(:final value) => BlogCarousel(posts: value, worker: worker),
+            AsyncError() => const Padding(
+              padding: Styles.bodySectionPadding,
+              child: Text('Could not load blog posts.'),
+            ),
+            _ => Shimmer(
+              child: ShimmerLoading(isLoading: true, child: BlogCarousel.loading(worker: worker)),
+            ),
+          },
+        ],
+      ),
+    );
+  }
+}
+
+class const _OngoingGamesCarousel(
+  final AsyncValue<IList<OngoingGame>> games, {
+  required final int maxGamesToShow,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    switch (games) {
+      case AsyncData(:final value):
+        if (value.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final realTime = value.where((game) => game.isRealTime);
+        final correspondence = value.where((game) => !game.isRealTime);
+        final list = [...realTime, ...correspondence].lock;
+        return GamesCarousel<OngoingGame>(
+          list: list,
+          onTap: (index) {
+            final game = list[index];
+            Navigator.of(context).pushHidingTabBar(
+              GameScreen.buildRoute(
+                source: ExistingGameSource(game.fullId),
+                loadingPosition: (
+                  variant: game.variant,
+                  fen: game.fen,
+                  orientation: game.orientation,
+                  lastMove: game.lastMove,
+                ),
+              ),
+            );
+          },
+          builder: (game) => OngoingGameCarouselItem(game: game),
+          moreScreenRouteBuilder: (context) => OngoingGamesScreen.buildRoute(),
+          maxGamesToShow: maxGamesToShow,
+        );
+      case _:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class const _OfflineCorrespondenceCarousel(
+  final AsyncValue<IList<(DateTime, OfflineCorrespondenceGame)>> offlineCorresGames, {
+  required final int maxGamesToShow,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return offlineCorresGames.maybeWhen(
+      data: (data) {
+        if (data.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return GamesCarousel(
+          list: data,
+          onTap: (index) {
+            final el = data[index];
+            Navigator.of(context).pushHidingTabBar(
+              OfflineCorrespondenceGameScreen.buildRoute(initialGame: (el.$1, el.$2)),
+            );
+          },
+          builder: (el) => OngoingGameCarouselItem(
+            game: OngoingGame(
+              id: el.$2.id,
+              fullId: el.$2.fullId,
+              orientation: el.$2.orientation,
+              fen: el.$2.lastPosition.fen,
+              perf: el.$2.perf,
+              speed: el.$2.speed,
+              variant: el.$2.variant,
+              opponent: el.$2.opponent!.user,
+              isMyTurn: el.$2.isMyTurn,
+              opponentRating: el.$2.opponent!.rating,
+              opponentAiLevel: el.$2.opponent!.aiLevel,
+              lastMove: el.$2.lastMove,
+              secondsLeft: el.$2.myTimeLeft(el.$1)?.inSeconds,
+            ),
+          ),
+          moreScreenRouteBuilder: (context) => OfflineCorrespondenceGamesScreen.buildRoute(),
+          maxGamesToShow: maxGamesToShow,
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class const _OngoingGamesPreview(
+  final AsyncValue<IList<OngoingGame>> games, {
+  required final int maxGamesToShow,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    switch (games) {
+      case AsyncData(:final value):
+        if (value.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final realTime = value.where((game) => game.isRealTime);
+        final correspondence = value.where((game) => !game.isRealTime);
+        final list = [...realTime, ...correspondence].lock;
+
+        return PreviewGameList(
+          list: list,
+          maxGamesToShow: maxGamesToShow,
+          builder: (el) =>
+              OngoingGamePreview(game: el, padding: const EdgeInsets.symmetric(vertical: 8.0)),
+          moreScreenRouteBuilder: (context) => OngoingGamesScreen.buildRoute(),
+        );
+      case _:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class const _OfflineCorrespondencePreview(
+  final AsyncValue<IList<(DateTime, OfflineCorrespondenceGame)>> offlineCorresGames, {
+  required final int maxGamesToShow,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return offlineCorresGames.maybeWhen(
+      data: (data) {
+        return PreviewGameList(
+          list: data,
+          maxGamesToShow: maxGamesToShow,
+          builder: (el) => OfflineCorrespondenceGamePreview(game: el.$2, lastModified: el.$1),
+          moreScreenRouteBuilder: (context) => OfflineCorrespondenceGamesScreen.buildRoute(),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class const PreviewGameList<T>({
+  required final IList<T> list,
+  required final Widget Function(T data) builder,
+  required final Route<dynamic> Function(BuildContext) moreScreenRouteBuilder,
+  required final int maxGamesToShow,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    if (list.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: Styles.horizontalBodyPadding.add(Styles.sectionTopPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListSectionHeader(
+            title: Text(context.l10n.nbGamesInPlay(list.length)),
+            onTap: list.length > maxGamesToShow
+                ? () {
+                    Navigator.of(context).push(moreScreenRouteBuilder(context));
+                  }
+                : null,
+          ),
+          for (final data in list.take(maxGamesToShow)) builder(data),
+        ],
+      ),
+    );
+  }
+}
+
+class const _ChallengeScreenButton() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authUser = ref.watch(authControllerProvider);
+    if (authUser == null) {
+      return const SizedBox.shrink();
+    }
+    // The home tab shows the outage message, so it is clear why this is
+    // disabled when the server is down.
+    final connectionStatus = ref.watch(lichessConnectionStatusProvider);
+    final challenges = ref.watch(challengesProvider);
+
+    final inwardCount = challenges.value?.inward.length ?? 0;
+    final outwardCount = challenges.value?.outward.length ?? 0;
+
+    if (inwardCount == 0 && outwardCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return SemanticIconButton(
+      icon: Badge.count(
+        count: inwardCount,
+        isLabelVisible: inwardCount > 0,
+        child: const Icon(LichessIcons.crossed_swords, size: 18.0),
+      ),
+      semanticsLabel: context.l10n.preferencesNotifyChallenge,
+      onPressed: connectionStatus != LichessConnectionStatus.online
+          ? null
+          : () {
+              ref.invalidate(challengesProvider);
+              Navigator.of(context).push(ChallengeRequestsScreen.buildRoute());
+            },
+    );
+  }
+}
+
+class const _TipCard({required final Widget content, required final List<Widget> actions})
+    extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: Styles.bodyPadding,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DefaultTextStyle.merge(
+                style: Theme.of(context).textTheme.bodyLarge,
+                child: Padding(padding: const EdgeInsets.all(8.0), child: content),
+              ),
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class const _HomeCustomizationTip() extends StatefulWidget {
+  @override
+  State<_HomeCustomizationTip> createState() => _HomeCustomizationTipState();
+}
+
+class _HomeCustomizationTipState() extends State<_HomeCustomizationTip> {
+  bool _shouldDisplayHomeWidgetCustomizationTip() {
+    final prefs = LichessBinding.instance.sharedPreferences;
+
+    return prefs.getBool(kHideHomeWidgetCustomizationTip) != true &&
+        LichessBinding.instance.numAppStarts <= kColdAppStartsHideCustomizationTipThreshold;
+  }
+
+  void _setHideHomeWidgetCustomizationTip() {
+    LichessBinding.instance.sharedPreferences.setBool(kHideHomeWidgetCustomizationTip, true);
+
+    // trigger rebuild to hide the tip
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_shouldDisplayHomeWidgetCustomizationTip()) {
+      return const SizedBox.shrink();
+    }
+
+    return _TipCard(
+      content: Text(context.l10n.mobileCustomizeHomeTip),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(
+              context,
+              rootNavigator: true,
+            ).push(HomeTabScreen.buildRoute(editModeEnabled: true));
+
+            _setHideHomeWidgetCustomizationTip();
+          },
+          child: Text(context.l10n.mobileCustomizeButton),
+        ),
+        const SizedBox(width: 8.0),
+        TextButton(
+          onPressed: () {
+            _setHideHomeWidgetCustomizationTip();
+          },
+          child: Text(context.l10n.mobileCustomizeHomeTipDismiss),
+        ),
+      ],
+    );
+  }
+}

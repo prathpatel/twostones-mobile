@@ -1,0 +1,453 @@
+import 'package:dartchess/dartchess.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/model/challenge/challenge.dart';
+import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/common/speed.dart';
+import 'package:lichess_mobile/src/model/game/game.dart';
+import 'package:lichess_mobile/src/model/game/game_controller.dart';
+import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
+import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart';
+import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/network/http.dart';
+import 'package:lichess_mobile/src/network/socket.dart';
+import 'package:lichess_mobile/src/service/create_game_service.dart';
+import 'package:lichess_mobile/src/styles/icon_extensions.dart';
+import 'package:lichess_mobile/src/tab_navigation.dart';
+import 'package:lichess_mobile/src/utils/immersive_mode.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/view/game/exported_game_title.dart';
+import 'package:lichess_mobile/src/view/game/game_body.dart';
+import 'package:lichess_mobile/src/view/game/game_common_widgets.dart';
+import 'package:lichess_mobile/src/view/game/game_loading_board.dart';
+import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
+import 'package:lichess_mobile/src/view/game/watcher_list_bottom_sheet.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
+import 'package:lichess_mobile/src/widgets/android_gesture_exclusion.dart';
+import 'package:lichess_mobile/src/widgets/bottom_bar.dart';
+import 'package:lichess_mobile/src/widgets/feedback.dart';
+import 'package:lichess_mobile/src/widgets/misc.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/platform_context_menu_button.dart';
+import 'package:material_ui/material_ui.dart';
+
+/// Screen to play a game, or to show a challenge or to show current user's past games.
+///
+/// The screen can be opened in three ways:
+/// - From the lobby, to play a game with a random opponent: using [LobbySource].
+/// - From a challenge, to accept or decline a challenge: using a [UserChallengeSource].
+/// - From an existing game: using [ExistingGameSource].
+///
+/// The screen will show a loading board while the game is being created.
+class const GameScreen({
+  required final GameScreenSource source,
+  final LoadingParam? loadingPosition,
+
+  /// The date of the last move played in the game. If null, the game is in progress.
+  final DateTime? lastMoveAt,
+  super.key,
+}) extends ConsumerStatefulWidget {
+  static Route<dynamic> buildRoute({
+    required GameScreenSource source,
+    LoadingParam? loadingPosition,
+    DateTime? lastMoveAt,
+  }) {
+    return buildScreenRoute(
+      screen: GameScreen(source: source, loadingPosition: loadingPosition, lastMoveAt: lastMoveAt),
+    );
+  }
+
+  @override
+  ConsumerState<GameScreen> createState() => _GameScreenState();
+}
+
+final _isRealTimePlayableGameProvider = FutureProvider.autoDispose.family<bool, GameFullId>((
+  Ref ref,
+  GameFullId gameId,
+) async {
+  final state = await ref.watch(gameControllerProvider(gameId).future);
+  return state.game.meta.speed != Speed.correspondence && state.game.playable;
+}, name: 'IsRealTimePlayableGameProvider');
+
+class _GameScreenState() extends ConsumerState<GameScreen> {
+  final _whiteClockKey = GlobalKey(debugLabel: 'whiteClockOnGameScreen');
+  final _blackClockKey = GlobalKey(debugLabel: 'blackClockOnGameScreen');
+  final _boardKey = GlobalKey(debugLabel: 'boardOnGameScreen');
+  AppLifecycleListener? _appLifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cancel pending seek when app goes to background to prevent games being created
+    // while the user is away from the app.
+    _appLifecycleListener = AppLifecycleListener(onPause: _cancelSeek);
+  }
+
+  @override
+  void dispose() {
+    _appLifecycleListener?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cancelSeek() async {
+    if (!mounted) return;
+    final loader = ref.read(gameScreenLoaderProvider(widget.source));
+    // Only cancel if we are still seeking
+    if (loader is! AsyncLoading<GameScreenState>) {
+      return;
+    }
+    switch (widget.source) {
+      case LobbySource():
+        await ref.read(createGameServiceProvider).cancelSeek();
+      case UserChallengeSource():
+        break;
+      case ExistingGameSource():
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final boardPreferences = ref.watch(boardPreferencesProvider);
+
+    switch (ref.watch(gameScreenLoaderProvider(widget.source))) {
+      case AsyncData(value: SeekCancelledState()):
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            title: switch (widget.source) {
+              LobbySource(:final seek) => _GameTitle(_LobbyTitleVariant(seek)),
+              _ => null,
+            },
+          ),
+          body: const LoadGameError('The game search was cancelled.', showBottomBar: false),
+        );
+      case AsyncData(value: ChallengeCancelledState()):
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            title: _GameTitle(
+              _ChallengeTitleVariant((widget.source as UserChallengeSource).challengeRequest),
+            ),
+          ),
+          body: const LoadGameError('The challenge was cancelled.', showBottomBar: false),
+        );
+      case AsyncData(
+        value: ChallengeDeclinedState(
+          response: ChallengeResponseDeclined(:final challenge, :final declineReason),
+        ),
+      ):
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            title: _GameTitle(
+              _ChallengeTitleVariant((widget.source as UserChallengeSource).challengeRequest),
+            ),
+          ),
+          body: ChallengeDeclinedBoard(
+            challenge: challenge,
+            declineReason: declineReason != null
+                ? declineReason.label(context.l10n)
+                : ChallengeDeclineReason.generic.label(context.l10n),
+          ),
+        );
+      case AsyncData(value: GameCreatedState(:final createdGameId)):
+        final isRealTimePlayingGame = ref.watch(
+          _isRealTimePlayableGameProvider(createdGameId).select((s) => s.value ?? false),
+        );
+
+        final socketUri = GameController.socketUri(createdGameId);
+
+        final body = PopScope(
+          canPop: isRealTimePlayingGame != true,
+          child: SafeArea(
+            // view padding can change on Android when immersive mode is enabled, so to prevent any
+            // board vertical shift, we set `maintainBottomViewPadding` to true.
+            maintainBottomViewPadding: true,
+            child: GameBody(
+              gameId: createdGameId,
+              // Only show the initial loading position if this is still the game that the GameScreen
+              // was created for. This will not be the case when searching for a new opponent after the game.
+              loadingPosition: switch (widget.source) {
+                ExistingGameSource(:final id) when id == createdGameId => widget.loadingPosition,
+                _ => null,
+              },
+              whiteClockKey: _whiteClockKey,
+              blackClockKey: _blackClockKey,
+              boardKey: _boardKey,
+              onLoadGameCallback: (id) {
+                if (mounted) {
+                  ref.read(gameScreenLoaderProvider(widget.source).notifier).loadGame(id);
+                }
+              },
+              onNewOpponentCallback: (game) {
+                if (!mounted) return;
+
+                if (widget.source is LobbySource) {
+                  ref.read(gameScreenLoaderProvider(widget.source).notifier).newOpponent();
+                } else {
+                  final savedSetup = ref.read(gameSetupPreferencesProvider);
+                  Navigator.of(context).pushReplacementHidingTabBar(
+                    GameScreen.buildRoute(
+                      source: LobbySource(GameSeek.newOpponentFromGame(game, savedSetup)),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        );
+
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            leading: isRealTimePlayingGame
+                ? AppBarIndicator(child: SocketPingRatingIcon(socketUri: socketUri))
+                : null,
+            title: _GameTitle(
+              _StandaloneTitleVariant(id: createdGameId, lastMoveAt: widget.lastMoveAt),
+              monitorSocket: isRealTimePlayingGame,
+              socketUri: socketUri,
+            ),
+            // The menu is rebuilt with the game state fields it shows, not the whole screen: every
+            // rebuild of the actions also redraws the pinned bar buttons on iOS 26.
+            actionsBuilder: (context, ref) => [
+              if (ref.watch(
+                    gameControllerProvider(createdGameId).select(
+                      (s) => s.value == null
+                          ? null
+                          : (
+                              nbWatchers: s.value!.nbWatchers,
+                              bookmarked: s.value!.game.bookmarked == true,
+                              youAre: s.value!.game.youAre,
+                              finished: s.value!.game.finished,
+                            ),
+                    ),
+                  )
+                  case final menuState?)
+                ContextMenuIconButton(
+                  icon: const Icon(Icons.more_horiz),
+                  semanticsLabel: context.l10n.menu,
+                  actions: [
+                    if (menuState.nbWatchers > 0)
+                      ContextMenuAction(
+                        icon: Icons.person_outline,
+                        label: 'Spectators (${menuState.nbWatchers})',
+                        onPressed: () {
+                          final s = ref.read(gameControllerProvider(createdGameId)).value;
+                          if (s == null) return;
+                          showAdaptiveDraggableBottomSheet<void>(
+                            context: context,
+                            builder: (_, scrollController) => WatcherListBottomSheet(
+                              nbWatchers: s.nbWatchers,
+                              watcherNames: s.watcherNames,
+                              scrollController: scrollController,
+                            ),
+                          );
+                        },
+                      ),
+                    ContextMenuAction(
+                      icon: menuState.bookmarked
+                          ? Icons.bookmark_remove_outlined
+                          : Icons.bookmark_add_outlined,
+                      label: menuState.bookmarked
+                          ? context.l10n.mobileRemoveBookmark
+                          : context.l10n.bookmarkThisGame,
+                      onPressed: () =>
+                          ref.read(gameControllerProvider(createdGameId).notifier).toggleBookmark(),
+                    ),
+                    ContextMenuAction(
+                      icon: Theme.of(context).platform == TargetPlatform.iOS
+                          ? Icons.ios_share_outlined
+                          : Icons.share_outlined,
+                      label: context.l10n.mobileShare,
+                      onPressed: null,
+                      submenu: makeFinishedGameShareMenuActions(
+                        context,
+                        ref,
+                        gameId: createdGameId.gameId,
+                        orientation: menuState.youAre ?? Side.white,
+                        finished: menuState.finished,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          body: Theme.of(context).platform == TargetPlatform.android
+              ? AndroidImmersiveModeWidget(
+                  enabled:
+                      isRealTimePlayingGame &&
+                      (boardPreferences.immersiveModeWhilePlaying ?? false),
+                  child: body,
+                )
+              : body,
+        );
+      case AsyncData(value: OpenChallengeCreatedState(:final challenge)):
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            leading: const AppBarIndicator(child: SocketPingRatingIcon()),
+            title: _GameTitle(
+              _ChallengeTitleVariant((widget.source as UserChallengeSource).challengeRequest),
+              monitorSocket: true,
+            ),
+          ),
+          body: PopScope(
+            canPop: false,
+            child: OpenChallengeLoadingContent(
+              id: challenge.id,
+              challengeRequest: (widget.source as UserChallengeSource).challengeRequest,
+              cancelChallenge: ref.read(createGameServiceProvider).cancelChallenge,
+            ),
+          ),
+        );
+      case AsyncError(error: final e, stackTrace: final s):
+        debugPrint('SEVERE: [GameScreen] could not create game; $e\n$s');
+
+        // lichess sends a 400 response if user has not allowed challenges
+        final message = e is ServerException && (e.statusCode == 400 || e.statusCode == 403)
+            ? LoadGameError('Could not create the game: ${e.jsonError?['error']}')
+            : const LoadGameError('Sorry, we could not create the game. Please try again later.');
+
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            leading: const AppBarIndicator(child: SocketPingRatingIcon()),
+            title: switch (widget.source) {
+              LobbySource(:final seek) => _GameTitle(_LobbyTitleVariant(seek), monitorSocket: true),
+              UserChallengeSource(:final challengeRequest) => _GameTitle(
+                _ChallengeTitleVariant(challengeRequest),
+                monitorSocket: true,
+              ),
+              _ => null,
+            },
+          ),
+          body: PopScope(child: message),
+        );
+      case _:
+        final loadingBoard = switch (widget.source) {
+          LobbySource(:final seek) => LobbyScreenLoadingContent(
+            seek,
+            () => ref.read(createGameServiceProvider).cancelSeek(),
+          ),
+          UserChallengeSource(:final challengeRequest) => UserChallengeLoadingContent(
+            challengeRequest,
+            () => ref.read(createGameServiceProvider).cancelChallenge(),
+          ),
+          ExistingGameSource() => StandaloneGameLoadingContent(
+            loadingParam: widget.loadingPosition,
+            userActionsBar: const BottomBar.empty(cupertinoGlass: true),
+          ),
+        };
+
+        return PlatformScaffold(
+          extendBodyBehindAppBar: false,
+          resizeToAvoidBottomInset: false,
+          appBar: PlatformAppBar(
+            leading: const AppBarIndicator(child: SocketPingRatingIcon()),
+            title: switch (widget.source) {
+              LobbySource(:final seek) => _GameTitle(_LobbyTitleVariant(seek), monitorSocket: true),
+              UserChallengeSource(:final challengeRequest) when challengeRequest.destUser != null =>
+                _GameTitle(_ChallengeTitleVariant(challengeRequest), monitorSocket: true),
+              _ => null,
+            },
+          ),
+          body: PopScope(canPop: false, child: WakelockWidget(child: loadingBoard)),
+        );
+    }
+  }
+}
+
+sealed class const _GameTitleVariant();
+
+final class const _LobbyTitleVariant(final GameSeek seek) extends _GameTitleVariant;
+
+final class const _ChallengeTitleVariant(final ChallengeRequest challenge)
+    extends _GameTitleVariant;
+
+final class const _StandaloneTitleVariant({
+  required final GameFullId id,
+  final DateTime? lastMoveAt,
+}) extends _GameTitleVariant;
+
+/// Single title widget for all GameScreen AppBar configurations.
+///
+/// When [monitorSocket] is true, shows "Reconnecting" if the socket is
+/// disconnected (ping rating == 0). [socketUri] scopes the ping check to a
+/// specific socket; null monitors the currently active route.
+class const _GameTitle(
+  final _GameTitleVariant variant, {
+  final bool monitorSocket = false,
+  final Uri? socketUri,
+}) extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (monitorSocket && ref.watch(socketPingProvider(socketUri)).rating == 0) {
+      return AppBarTitleText(context.l10n.reconnecting);
+    }
+
+    return switch (variant) {
+      _LobbyTitleVariant(:final seek) => _buildLobbyContent(context, seek),
+      _ChallengeTitleVariant(:final challenge) => _buildChallengeContent(context, challenge),
+      _StandaloneTitleVariant(:final id, :final lastMoveAt) => _ExportedGameTitle(
+        id: id,
+        lastMoveAt: lastMoveAt,
+      ),
+    };
+  }
+
+  static Widget _buildLobbyContent(BuildContext context, GameSeek seek) {
+    final mode = seek.rated ? ' • ${context.l10n.rated}' : ' • ${context.l10n.casual}';
+    return Row(
+      mainAxisSize: .min,
+      children: [
+        Icon(seek.perf.icon, color: DefaultTextStyle.of(context).style.color),
+        const SizedBox(width: 4.0),
+        Text('${seek.timeIncrement?.display}$mode'),
+      ],
+    );
+  }
+
+  static Widget _buildChallengeContent(BuildContext context, ChallengeRequest challenge) {
+    final mode = challenge.rated ? ' • ${context.l10n.rated}' : ' • ${context.l10n.casual}';
+    return Row(
+      mainAxisSize: .min,
+      children: [
+        Icon(challenge.perf.icon, color: DefaultTextStyle.of(context).style.color),
+        const SizedBox(width: 4.0),
+        if (challenge.timeIncrement != null)
+          Text('${challenge.timeIncrement?.display}$mode')
+        else if (challenge.days != null)
+          Text('${context.l10n.nbDays(challenge.days!)}$mode'),
+      ],
+    );
+  }
+}
+
+final _gameMetaProvider = FutureProvider.autoDispose.family<GameMeta, GameFullId>((
+  Ref ref,
+  GameFullId gameId,
+) async {
+  // Using ref.read as an optimization since we know that game meta never changes during the game.
+  return (await ref.read(gameControllerProvider(gameId).future)).game.meta;
+}, name: 'GameMetaProvider');
+
+class const _ExportedGameTitle({required final GameFullId id, final DateTime? lastMoveAt})
+    extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final metaAsync = ref.watch(_gameMetaProvider(id));
+    return metaAsync.when(
+      data: (meta) => ExportedGameTitle(meta: meta, lastMoveAt: lastMoveAt),
+      loading: () => const ExportedGameTitleLoading(),
+      error: (error, _) => const SizedBox.shrink(),
+    );
+  }
+}

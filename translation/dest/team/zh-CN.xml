@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">团队</string>
+  <string name="teams">团队</string>
+  <plurals name="nbMembers">
+    <item quantity="other">%s 位成员</item>
+  </plurals>
+  <string name="allTeams">所有团队</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">我领导的团队</string>
+  <string name="newTeam">新建团队</string>
+  <string name="myTeams">我的团队</string>
+  <string name="noTeamFound">未找到团队</string>
+  <string name="joinTeam">加入团队</string>
+  <string name="quitTeam">离开团队</string>
+  <plurals name="teamLeaders">
+    <item quantity="other">团队领导</item>
+  </plurals>
+  <string name="teamRecentMembers">近期成员</string>
+  <string name="willBeReviewed">您的加入请求将由团队领导审核。</string>
+  <string name="beingReviewed">您的加入请求正在由团队领导审核。</string>
+  <string name="requestDeclined">您的加入请求已被团队领导拒绝。</string>
+  <string name="teamBattle">团队对战</string>
+  <string name="teamBattleOverview">多个团队之间的对战，每位棋手为其团队赢得积分</string>
+  <string name="teamTournament">团队锦标赛</string>
+  <string name="teamTournamentOverview">一个仅限您团队成员参加的竞技场锦标赛</string>
+  <string name="swissTournamentOverview">一个仅限您团队成员参加的瑞士制锦标赛</string>
+  <string name="teamUpdates">团队动态</string>
+  <string name="subToTeamUpdates">订阅团队动态</string>
+  <string name="teamEvents">团队赛事</string>
+  <string name="upcomingTeamEvents">即将举行的团队赛事</string>
+  <string name="teamsIlead">我领导的团队</string>
+  <string name="leadersChat">领导聊天室</string>
+  <string name="introduction">简介</string>
+  <string name="entryCode">团队准入码</string>
+  <string name="entryCodeDescriptionForLeader">（可选）新成员加入此团队必须知道的准入码。</string>
+  <string name="incorrectEntryCode">准入码不正确。</string>
+  <string name="forumLabel">团队论坛</string>
+  <string name="teamAlreadyExists">此团队已存在。</string>
+  <string name="upcomingTournaments">即将开始的锦标赛</string>
+  <string name="completedTourns">已结束的锦标赛</string>
+  <string name="joinLichessVariantTeam">加入官方的 %s 团队以获取新闻和赛事信息</string>
+  <string name="innerTeam">内部团队</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="other">%s 个团队的对战</item>
+  </plurals>
+  <plurals name="nbLeadersPerTeam">
+    <item quantity="other">每个团队 %s 名领导</item>
+  </plurals>
+</resources>

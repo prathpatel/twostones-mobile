@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Equipo</string>
+  <string name="teams">Equipos</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s miembro</item>
+    <item quantity="other">%s miembros</item>
+  </plurals>
+  <string name="allTeams">Totz los equipos</string>
+  <string name="newTeam">Equipo nuevo</string>
+  <string name="myTeams">Los míos equipos</string>
+  <string name="noTeamFound">Garra equipo trobau</string>
+  <string name="joinTeam">Unir-se a l\'equipo</string>
+  <string name="quitTeam">Abandonar l\'equipo</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Capitán de l\'equipo</item>
+    <item quantity="other">Liders de l\'equipo</item>
+  </plurals>
+  <string name="teamRecentMembers">Miembros recients</string>
+  <string name="willBeReviewed">Lo lider de l\'equipo revisará la tuya solicitut d\'ingreso.</string>
+  <string name="beingReviewed">Lo lider de l\'equipo ye revisando la tuya solicitut d\'ingreso.</string>
+  <string name="teamBattle">Batalla per Equipos</string>
+  <string name="teamBattleOverview">Una batalla de quantos equipos, cada chugador anota puntos pa lo suyo equipo</string>
+  <string name="teamTournament">Torneyo d\'equipo</string>
+  <string name="teamTournamentOverview">Un torneyo a lo qual nomás pueden unir-se los miembros d\'o tuyo equipo</string>
+  <string name="teamsIlead">Equipos que lidero</string>
+  <string name="leadersChat">Chat de liders</string>
+  <string name="teamAlreadyExists">Este equipo ya existe.</string>
+</resources>

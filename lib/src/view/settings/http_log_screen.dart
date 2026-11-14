@@ -1,0 +1,231 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:lichess_mobile/src/constants.dart';
+import 'package:lichess_mobile/src/model/log/http_log_paginator.dart';
+import 'package:lichess_mobile/src/model/log/http_log_storage.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_action_sheet.dart';
+import 'package:lichess_mobile/src/widgets/haptic_refresh_indicator.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/platform_search_bar.dart';
+import 'package:material_ui/material_ui.dart';
+
+class const HttpLogScreen({super.key}) extends ConsumerStatefulWidget {
+  static Route<dynamic> buildRoute() {
+    return buildScreenRoute(screen: const HttpLogScreen());
+  }
+
+  @override
+  ConsumerState<HttpLogScreen> createState() => _HttpLogScreenState();
+}
+
+class _HttpLogScreenState() extends ConsumerState<HttpLogScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey = GlobalKey<RefreshIndicatorState>();
+  final TextEditingController _searchController = TextEditingController();
+  String? _searchQuery;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+      final currentState = ref.read(httpLogPaginatorProvider(_searchQuery));
+      if (currentState.hasValue && !currentState.isLoading && currentState.requireValue.hasMore) {
+        ref.read(httpLogPaginatorProvider(_searchQuery).notifier).next();
+      }
+    }
+  }
+
+  Future<void> _onRefresh() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return await ref.read(httpLogPaginatorProvider(_searchQuery).notifier).refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final asyncState = ref.watch(httpLogPaginatorProvider(_searchQuery));
+    return PlatformScaffold(
+      plainList: true,
+      appBar: PlatformAppBar(
+        title: Text(context.l10n.mobileHttpLogs),
+        actions: [
+          if (asyncState.value?.isDeleteButtonVisible == true)
+            IconButton(
+              tooltip: context.l10n.mobileClearButton,
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: () {
+                showConfirmDialog<dynamic>(
+                  context,
+                  title: Text(context.l10n.mobileDeleteAllLogsConfirmation),
+                  onConfirm: () =>
+                      ref.read(httpLogPaginatorProvider(_searchQuery).notifier).deleteAll(),
+                );
+              },
+            ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: PlatformSearchBar(
+              controller: _searchController,
+              inAppBar: true,
+              hintText: context.l10n.searchSearch,
+              onChanged: (value) => setState(() {
+                _searchQuery = value.isEmpty ? null : value;
+              }),
+              onClear: () => setState(() {
+                _searchQuery = null;
+                _searchController.clear();
+              }),
+            ),
+          ),
+        ),
+      ),
+      body: _HttpLogList(
+        scrollController: _scrollController,
+        refreshIndicatorKey: _refreshIndicatorKey,
+        logs: asyncState.value?.logs.toList() ?? [],
+        onRefresh: _onRefresh,
+      ),
+    );
+  }
+}
+
+class const _HttpLogList({
+  required final List<HttpLogEntry> logs,
+  required final RefreshCallback onRefresh,
+  required final ScrollController scrollController,
+  required final GlobalKey<RefreshIndicatorState> refreshIndicatorKey,
+}) extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_HttpLogList> createState() => _HttpLogListState();
+}
+
+class _HttpLogListState() extends ConsumerState<_HttpLogList> {
+  @override
+  Widget build(BuildContext context) {
+    if (widget.logs.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(context.l10n.nothingToSeeHere),
+            TextButton(onPressed: widget.onRefresh, child: const Text('Tap to refresh')),
+          ],
+        ),
+      );
+    }
+    return HapticRefreshIndicator(
+      key: widget.refreshIndicatorKey,
+      onRefresh: widget.onRefresh,
+      child: ListView.separated(
+        controller: widget.scrollController,
+        itemCount: widget.logs.length,
+        separatorBuilder: (_, _) => const Divider(height: 1, thickness: 0),
+        itemBuilder: (_, index) {
+          if (index < 0 || index >= widget.logs.length) {
+            return null;
+          }
+
+          return HttpLogTile(httpLog: widget.logs[index]);
+        },
+      ),
+    );
+  }
+}
+
+DateFormat get _logDateFormatter => DateFormat.yMd().add_Hms();
+
+String _formatElapsed(Duration elapsed) {
+  if (elapsed.inMilliseconds < 1000) {
+    return '${elapsed.inMilliseconds}ms';
+  }
+  return '${(elapsed.inMilliseconds / 1000).toStringAsFixed(1)}s';
+}
+
+String _formatSize(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes B';
+  }
+  return '${(bytes / 1024).toStringAsFixed(1)} kB';
+}
+
+class const HttpLogTile({super.key, required final HttpLogEntry httpLog}) extends StatelessWidget {
+  String get endpoint => httpLog.requestUrl.host == kLichessHost
+      ? Uri(path: httpLog.requestUrl.path, query: httpLog.requestUrl.query).toString()
+      : httpLog.requestUrl.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final date = _logDateFormatter.format(httpLog.requestDateTime);
+    final tile = ListTile(
+      dense: true,
+      leading: SizedBox(
+        width: 40,
+        child: httpLog.hasResponse
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    httpLog.responseCode!.toString(),
+                    style: TextStyle(
+                      color: httpLog.responseCode! >= 400 ? ColorScheme.of(context).error : null,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (httpLog.elapsed != null)
+                    Text(
+                      _formatElapsed(httpLog.elapsed!),
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: textShade(context, 0.7),
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        fontSize: 10,
+                      ),
+                    ),
+                ],
+              )
+            : const Icon(Icons.error_outline, color: Colors.grey),
+      ),
+      title: Text(
+        '${httpLog.requestMethod} $endpoint',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 14,
+          letterSpacing: -0.15,
+          color: httpLog.hasResponse
+              ? httpLog.responseCode! >= 400
+                    ? ColorScheme.of(context).error
+                    : null
+              : textShade(context, 0.7),
+        ),
+      ),
+      subtitle: Text(switch (httpLog) {
+        HttpLogEntry(cache: final cache?) => '$date (${cache.name} cache)',
+        HttpLogEntry(responseSize: final size?) => '$date (${_formatSize(size)})',
+        _ => date,
+      }, style: TextStyle(color: textShade(context, 0.7), fontSize: 12)),
+    );
+    // Cached responses didn't hit the network: fade them so that network requests stand out.
+    return httpLog.fromCache ? Opacity(opacity: 0.6, child: tile) : tile;
+  }
+}

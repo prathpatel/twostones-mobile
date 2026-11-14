@@ -1,0 +1,350 @@
+import 'package:dartchess/dartchess.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/model/common/local_game_clock.dart';
+import 'package:lichess_mobile/src/model/common/time_increment.dart';
+import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart';
+import 'package:lichess_mobile/src/model/over_the_board/over_the_board_clock.dart';
+import 'package:lichess_mobile/src/model/over_the_board/over_the_board_game_controller.dart';
+import 'package:lichess_mobile/src/model/over_the_board/over_the_board_preferences.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_bottom_sheet.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
+import 'package:lichess_mobile/src/widgets/board_preview.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/non_linear_slider.dart';
+import 'package:lichess_mobile/src/widgets/settings.dart';
+import 'package:lichess_mobile/src/widgets/variant_app_bar_title.dart';
+import 'package:material_ui/material_ui.dart';
+
+void showConfigureGameSheet(
+  BuildContext context, {
+  required bool isDismissible,
+  required Variant initialVariant,
+  String? initialFen,
+}) {
+  final double screenHeight = MediaQuery.heightOf(context);
+  showAdaptiveBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    isDismissible: isDismissible,
+    constraints: BoxConstraints(maxHeight: screenHeight - (screenHeight / 10)),
+    builder: (BuildContext context) {
+      return _ConfigureOverTheBoardGameSheet(
+        initialVariant: initialVariant,
+        initialFen: initialFen,
+      );
+    },
+  );
+}
+
+class const _ConfigureOverTheBoardGameSheet({
+  required final Variant initialVariant,
+  final String? initialFen,
+}) extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_ConfigureOverTheBoardGameSheet> createState() =>
+      _ConfigureOverTheBoardGameSheetState();
+}
+
+class _ConfigureOverTheBoardGameSheetState()
+    extends ConsumerState<_ConfigureOverTheBoardGameSheet> {
+  late Variant chosenVariant;
+  late TimeControlType chosenTimeControlType;
+
+  late TimeIncrement timeIncrement;
+  late TimeIncrement prevIncrement;
+
+  String? _fromPositionFen;
+  final _fenController = TextEditingController();
+
+  @override
+  void initState() {
+    // Auto-switch variant to fromPosition when an initialFen is given for a
+    // standard game (mirrors the controller's fromVariant logic), and fall back
+    // to standard when fromPosition arrives without a FEN (e.g. "New game"
+    // after a fromPosition game).
+    if (widget.initialFen != null && widget.initialVariant == Variant.standard) {
+      chosenVariant = Variant.fromPosition;
+    } else if (widget.initialFen == null && widget.initialVariant == Variant.fromPosition) {
+      chosenVariant = Variant.standard;
+    } else {
+      chosenVariant = widget.initialVariant;
+    }
+    _fromPositionFen = widget.initialFen;
+    if (widget.initialFen != null) {
+      _fenController.text = widget.initialFen!;
+    }
+    _fenController.addListener(() {
+      setState(() => _fromPositionFen = _fenController.text.isEmpty ? null : _fenController.text);
+    });
+    final preferences = ref.read(overTheBoardPreferencesProvider);
+    timeIncrement = preferences.timeIncrement;
+    prevIncrement = timeIncrement;
+    chosenTimeControlType = timeIncrement.isInfinite
+        ? TimeControlType.unlimited
+        : TimeControlType.clock;
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _fenController.dispose();
+    super.dispose();
+  }
+
+  void _setTimeControlType(TimeControlType type) {
+    chosenTimeControlType = type;
+    setState(() {
+      if (type == TimeControlType.unlimited) {
+        prevIncrement = timeIncrement;
+        timeIncrement = const TimeIncrement.infinite();
+      } else if (timeIncrement.isInfinite) {
+        timeIncrement = prevIncrement;
+      }
+    });
+    ref.read(overTheBoardPreferencesProvider.notifier).setTimeIncrement(timeIncrement).then((_) {
+      ref.read(overTheBoardPreferencesProvider.notifier).setTimeControlType(chosenTimeControlType);
+    });
+  }
+
+  void _setTotalTime(num seconds) {
+    setState(() {
+      _updateTimeIncrement(TimeIncrement(seconds.toInt(), timeIncrement.increment));
+    });
+  }
+
+  void _setIncrement(num seconds) {
+    setState(() {
+      _updateTimeIncrement(TimeIncrement(timeIncrement.time, seconds.toInt()));
+    });
+  }
+
+  void _updateTimeIncrement(TimeIncrement newIncrement) {
+    setState(() {
+      timeIncrement = newIncrement;
+      chosenTimeControlType = timeIncrement.isInfinite
+          ? TimeControlType.unlimited
+          : TimeControlType.clock;
+    });
+    ref.read(overTheBoardPreferencesProvider.notifier).setTimeIncrement(newIncrement).then((_) {
+      ref.read(overTheBoardPreferencesProvider.notifier).setTimeControlType(chosenTimeControlType);
+    });
+  }
+
+  bool get _isPlayEnabled =>
+      chosenVariant != Variant.fromPosition ||
+      (_fromPositionFen != null && _fromPositionFen!.isNotEmpty);
+
+  @override
+  Widget build(BuildContext context) {
+    final hasClock = chosenTimeControlType == TimeControlType.clock;
+
+    return BottomSheetScrollableContainer(
+      children: [
+        ListSection(
+          materialFilledCard: true,
+          children: [
+            SettingsListTile(
+              settingsLabel: Text(context.l10n.timeControl),
+              settingsValue: chosenTimeControlType.label(context.l10n),
+              onTap: () {
+                showChoicePicker<TimeControlType>(
+                  context,
+                  title: Text(context.l10n.timeControl),
+                  choices: TimeControlType.values,
+                  selectedItem: chosenTimeControlType,
+                  labelBuilder: (TimeControlType control) => Text(control.label(context.l10n)),
+                  onSelectedItemChanged: (TimeControlType control) => _setTimeControlType(control),
+                );
+              },
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: hasClock
+                  ? Column(
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            int seconds = timeIncrement.time;
+                            return StatefulBuilder(
+                              builder: (context, setState) {
+                                return ListTile(
+                                  title: Text.rich(
+                                    TextSpan(
+                                      text: '${context.l10n.minutesPerSide}: ',
+                                      children: [
+                                        TextSpan(
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                          ),
+                                          text: clockLabelInMinutes(seconds),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  subtitle: NonLinearSlider(
+                                    value: seconds,
+                                    values: kAvailableTimesInSeconds,
+                                    labelBuilder: clockLabelInMinutes,
+                                    onChange: (num value) {
+                                      setState(() {
+                                        seconds = value.toInt();
+                                      });
+                                    },
+                                    onChangeEnd: (num value) {
+                                      setState(() {
+                                        seconds = value.toInt();
+                                      });
+                                      _setTotalTime(value);
+                                    },
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        Builder(
+                          builder: (context) {
+                            int incrementSeconds = timeIncrement.increment;
+                            return StatefulBuilder(
+                              builder: (context, setState) {
+                                return ListTile(
+                                  title: Text.rich(
+                                    TextSpan(
+                                      text: '${context.l10n.incrementInSeconds}: ',
+                                      children: [
+                                        TextSpan(
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                          ),
+                                          text: incrementSeconds.toString(),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  subtitle: NonLinearSlider(
+                                    value: incrementSeconds,
+                                    values: kAvailableIncrementsInSeconds,
+                                    onChange: (num value) {
+                                      setState(() {
+                                        incrementSeconds = value.toInt();
+                                      });
+                                    },
+                                    onChangeEnd: (num value) {
+                                      setState(() {
+                                        incrementSeconds = value.toInt();
+                                      });
+                                      _setIncrement(value);
+                                    },
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            SettingsListTile(
+              settingsLabel: Text(context.l10n.variant),
+              settingsValue: chosenVariant.label(context.l10n),
+              onTap: () {
+                showChoicePicker<Variant>(
+                  context,
+                  choices: playSupportedVariants.toList(),
+                  selectedItem: chosenVariant,
+                  labelBuilder: (variant) => VariantLabel(variant),
+                  onSelectedItemChanged: (Variant variant) => setState(() {
+                    chosenVariant = variant;
+                  }),
+                );
+              },
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.fastOutSlowIn,
+              child: chosenVariant == Variant.fromPosition
+                  ? SmallBoardPreview(
+                      orientation: Side.white,
+                      fen: _fromPositionFen ?? kEmptyFEN,
+                      description: TextField(
+                        maxLines: 5,
+                        decoration: InputDecoration(
+                          labelText: context.l10n.pasteTheFenStringHere,
+                          suffixIcon: const Icon(Icons.paste),
+                        ),
+                        controller: _fenController,
+                        readOnly: true,
+                        onTap: () => pasteFenFromClipboard(context, _fenController),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+        Padding(
+          padding: Styles.horizontalBodyPadding,
+          child: FilledButton(
+            onPressed: _isPlayEnabled
+                ? () {
+                    ref.read(overTheBoardClockProvider.notifier).setupClock(timeIncrement);
+                    ref
+                        .read(overTheBoardGameControllerProvider.notifier)
+                        .startNewGame(chosenVariant, timeIncrement, initialFen: _fromPositionFen);
+                    Navigator.pop(context);
+                  }
+                : null,
+            child: Text(context.l10n.play),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+void showConfigureDisplaySettings(BuildContext context) {
+  showAdaptiveBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (BuildContext context) {
+      return const OverTheBoardDisplaySettings();
+    },
+  );
+}
+
+class const OverTheBoardDisplaySettings() extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(overTheBoardPreferencesProvider);
+
+    return BottomSheetScrollableContainer(
+      children: [
+        SwitchSettingTile(
+          title: Text(context.l10n.mobileUseSymmetricPieces),
+          value: prefs.symmetricPieces,
+          onChanged: (_) =>
+              ref.read(overTheBoardPreferencesProvider.notifier).toggleSymmetricPieces(),
+        ),
+        SwitchSettingTile(
+          title: Text(context.l10n.mobileFlipPiecesAfterMove),
+          value: prefs.flipPiecesAfterMove,
+          onChanged: (_) =>
+              ref.read(overTheBoardPreferencesProvider.notifier).toggleFlipPiecesAfterMove(),
+        ),
+        SwitchSettingTile(
+          title: Text(context.l10n.preferencesBlindfold),
+          value: prefs.blindfoldMode,
+          onChanged: (_) =>
+              ref.read(overTheBoardPreferencesProvider.notifier).toggleBlindfoldMode(),
+        ),
+      ],
+    );
+  }
+}

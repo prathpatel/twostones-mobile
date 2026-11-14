@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Ekip</string>
+  <string name="teams">Ekipet</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s anëtar</item>
+    <item quantity="other">%s anëtarë</item>
+  </plurals>
+  <string name="allTeams">Krejt ekipet</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">Ekipet udhëheqëse</string>
+  <string name="newTeam">Ekip i ri</string>
+  <string name="myTeams">Ekipet e mia</string>
+  <string name="noTeamFound">S’u gjet ekip</string>
+  <string name="joinTeam">Bëhuni pjesë e ekipit</string>
+  <string name="quitTeam">Braktiseni ekipin</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Drejtues ekipi</item>
+    <item quantity="other">Drejtues ekipi</item>
+  </plurals>
+  <string name="teamRecentMembers">Anëtarët e rinj</string>
+  <string name="willBeReviewed">Kërkesa juaj për t’u bërë pjesë e ekipit do të shqyrtohet nga një drejtues i ekipit.</string>
+  <string name="beingReviewed">Kërkesa juaj për t’u bërë pjesë e ekipit po shqyrtohet nga një drejtues i ekipit.</string>
+  <string name="requestDeclined">Kërkesa juaj për t’u bërë pjesë e ekipit u hodh poshtë nga një drejtues i ekipit.</string>
+  <string name="teamBattle">Ndeshje Ekipore</string>
+  <string name="teamBattleOverview">Ndeshje e disa ekipeve, secili lojtar shënon pikë për ekipin e vet</string>
+  <string name="teamTournament">Turne ekipi</string>
+  <string name="teamTournamentOverview">Një turne Arenë në të cilin mund të marrin pjesë vetëm lojtarët e ekipit tuaj</string>
+  <string name="swissTournamentOverview">Një turne Zviceran në të cilin mund të marrin pjesë vetëm lojtarët e ekipit tuaj</string>
+  <string name="teamUpdates">Përditësime për ekipin</string>
+  <string name="subToTeamUpdates">Pajtohuni për përdtësime për ekipin</string>
+  <string name="teamsIlead">Ekipet e drejtuara nga unë</string>
+  <string name="leadersChat">Bisedë drejtuesish</string>
+  <string name="introduction">Hyrje</string>
+  <string name="entryCode">Kod hyrjeje i ekipit</string>
+  <string name="entryCodeDescriptionForLeader">(Opsionale) Një kod hyrjeje që anëtarët e rinj duhet ta dinë për të marrë pjesë në këtë ekip.</string>
+  <string name="incorrectEntryCode">Kod hyrjeje i pasaktë.</string>
+  <string name="teamAlreadyExists">Ky ekip ekziston tashmë.</string>
+  <string name="upcomingTournaments">Turne s’afërmi</string>
+  <string name="completedTourns">Turne të plotësuar</string>
+  <string name="joinLichessVariantTeam">Bëhuni pjesë e ekipit zyrtar %s, për lajme dhe veprimtari</string>
+  <string name="innerTeam">Ekipi i brendshëm</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="one">Ndeshje e %s ekipeve</item>
+    <item quantity="other">Ndeshje e %s ekipeve</item>
+  </plurals>
+  <plurals name="nbLeadersPerTeam">
+    <item quantity="one">Një drejtues për ekip</item>
+    <item quantity="other">%s drejtues për ekip</item>
+  </plurals>
+</resources>

@@ -1,0 +1,512 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:dartchess/dartchess.dart';
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:lichess_mobile/src/constants.dart';
+import 'package:lichess_mobile/src/model/analysis/analysis_controller.dart';
+import 'package:lichess_mobile/src/model/analysis/retro_controller.dart';
+import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/model/common/eval.dart';
+import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/common/uci.dart';
+import 'package:lichess_mobile/src/model/explorer/opening_explorer.dart';
+import 'package:lichess_mobile/src/model/game/game_socket_events.dart';
+import 'package:lichess_mobile/src/network/http.dart';
+import 'package:lichess_mobile/src/service/server_analysis_service.dart';
+import 'package:lichess_mobile/src/view/analysis/retro_screen.dart';
+import 'package:material_ui/material_ui.dart' show TabBarView;
+import 'package:mocktail/mocktail.dart';
+
+import '../../network/fake_http_client_factory.dart';
+import '../../network/fake_websocket_channel.dart';
+import '../../test_helpers.dart';
+import '../../test_provider_scope.dart';
+
+const testId = GameId('abcdefgh');
+
+class MockServerAnalysisService() extends Mock implements ServerAnalysisService;
+
+Future<Widget> makeTestApp(
+  WidgetTester tester, {
+  required String moves,
+  Iterable<ExternalEval>? evals,
+  IMap<String, OpeningExplorerEntry> openingExplorerEntries = const IMap.empty(),
+  bool alreadyHasServerAnalysis = true,
+  bool gameLoadFails = false,
+  Map<ProviderOrFamily, Override> overrides = const {},
+}) async {
+  final mockClient = MockClient((request) {
+    if (request.url.path == '/game/export/$testId') {
+      if (gameLoadFails) {
+        return mockResponse('game unavailable', 500);
+      }
+      return mockResponse('''
+{
+  "id": "${testId.value}",
+  "rated": true,
+  "source": "lobby",
+  "variant": "standard",
+  "speed": "bullet",
+  "perf": "bullet",
+  "createdAt": 1706185945680,
+  "lastMoveAt": 1706186170504,
+  "status": "resign",
+  "players": {
+    "white": {
+      ${alreadyHasServerAnalysis ? '"analysis": {"inaccuracy": 2, "mistake": 1, "blunder": 3, "acpl": 90},' : ""}
+      "user": {
+        "name": "veloce",
+        "id": "veloce"
+      },
+      "rating": 1789,
+      "ratingDiff": 9
+    },
+    "black": {
+      ${alreadyHasServerAnalysis ? '"analysis": {"inaccuracy": 3, "mistake": 0, "blunder": 5, "acpl": 135},' : ""}
+      "user": {
+        "name": "chabrot",
+        "id": "chabrot"
+      },
+      "rating": 1810,
+      "ratingDiff": -9
+    }
+  },
+  "winner": "white",
+  "opening": {
+    "eco": "C52",
+    "name": "Italian Game: Evans Gambit, Main Line",
+    "ply": 10
+  },
+  "moves": "$moves",
+  "clocks": [${Iterable.generate(moves.length, (_) => '1000').join(',')}],
+  "analysis": [
+    ${evals?.map((eval) => jsonEncode({if (eval.cp != null) 'eval': eval.cp, if (eval.mate != null) 'mate': eval.mate, if (eval.variation != null) 'variation': eval.variation})).join(',') ?? ''}
+  ],
+  "clock": {
+    "initial": 120,
+    "increment": 1,
+    "totalTime": 160
+  }
+}
+        ''', 200);
+    }
+    if (request.url.host == kLichessOpeningExplorerHost && request.url.path == '/masters') {
+      final fen = request.url.queryParameters['fen']!;
+      final entry = openingExplorerEntries.entryOrNull(fen)?.value;
+      if (entry != null) {
+        return mockResponse(
+          jsonEncode({
+            'white': entry.white,
+            'draws': entry.draws,
+            'black': entry.black,
+            'moves': entry.moves
+                .map(
+                  (move) => {
+                    'uci': move.uci,
+                    'san': move.san,
+                    'white': move.white,
+                    'draws': move.draws,
+                    'black': move.black,
+                  },
+                )
+                .toList(),
+          }),
+          200,
+        );
+      }
+      return mockResponse('{"white":0,"draws":0,"black":0,"moves":[]}', 200);
+    }
+    return mockResponse('', 404);
+  });
+
+  return await makeTestProviderScopeApp(
+    tester,
+    home: const RetroScreen(options: (id: testId, initialSide: Side.white)),
+    overrides: {
+      httpClientFactoryProvider: httpClientFactoryProvider.overrideWith((ref) {
+        return FakeHttpClientFactory(() => mockClient);
+      }),
+      ...overrides,
+    },
+    defaultPreferences: {},
+  );
+}
+
+String makeEvalHitEvent({
+  required Iterable<UCIMove> uciMoves,
+  required UCIMove bestMove,
+  int? cp,
+  int? mate,
+}) =>
+    '''
+{
+  "t": "evalHit",
+  "d": {
+    "path": "${UciPath.fromUciMoves(uciMoves).value}",
+    "knodes": 1,
+    "depth": 20,
+    "pvs": [
+      {
+        "moves": ["${uciMoves.last}"]
+        ${cp != null ? ',"cp": $cp' : ''}
+        ${mate != null ? '",mate": $mate' : ''}
+      }
+    ]
+  }
+}
+''';
+
+void main() {
+  group('retro screen', () {
+    testWidgets('No mistakes on both sides', (WidgetTester tester) async {
+      await tester.pumpWidget(await makeTestApp(tester, moves: 'e4 e5'));
+
+      // Wait for retro to load
+      await tester.pump();
+
+      expect(find.text('No significant mistakes found for White'), findsOneWidget);
+      expect(find.text("Review black's mistakes"), findsOneWidget);
+
+      await tester.tap(find.text("Review black's mistakes"));
+      await tester.pump(); // Wait for side to flip
+
+      expect(find.text('No significant mistakes found for Black'), findsOneWidget);
+      expect(find.text("Review white's mistakes"), findsOneWidget);
+    });
+
+    testWidgets('the bottom bar floats over the tab view on iOS only', variant: kPlatformVariant, (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(await makeTestApp(tester, moves: 'e4 e5'));
+      await tester.pump();
+
+      final bottomInset = expectBottomBarOverTabView(tester);
+      // The feedback is centered above the bar.
+      final feedback = find.text('No significant mistakes found for White');
+      final tabViewRect = tester.getRect(find.byType(TabBarView));
+      expect(
+        tester.getCenter(feedback).dy,
+        moreOrLessEquals((tabViewRect.top + tabViewRect.bottom - bottomInset) / 2, epsilon: 30),
+      );
+    });
+
+    testWidgets('One mistake by both sides', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        await makeTestApp(
+          tester,
+          moves: 'e4 e5 Nf3',
+          evals: [
+            const ExternalEval(cp: 0, mate: null),
+            // Pretend e5 was a mistake, should've played the Sicilian obviously
+            const ExternalEval(cp: 2000, mate: null, variation: 'c5'),
+            // ... and white should've played King's gambit instead of Nf3
+            const ExternalEval(cp: -2000, mate: null, variation: 'f4'),
+          ],
+        ),
+      );
+
+      // Wait for retro to load
+      await tester.pump();
+
+      expect(find.text('2. Nf3 was played'), findsOneWidget);
+      expect(find.text('Find a better move for white'), findsOneWidget);
+      expect(find.text('Skip this move'), findsOneWidget);
+
+      await playMove(tester, 'g1', 'f3');
+      // Wait for failure message to appear and move to be taken back
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(boardHasPiece(tester, Square.g1, Piece.whiteKnight), isTrue);
+
+      expect(find.text('You can do better'), findsOneWidget);
+      expect(find.text('Try another move for white'), findsOneWidget);
+
+      await playMove(tester, 'd2', 'd4');
+
+      expect(find.text('Evaluating your move ...'), findsOneWidget);
+
+      // Should not be able to interact with the board while waiting for eval
+      await playMove(tester, 'a7', 'a6');
+      await tester.pump();
+      expect(boardHasPiece(tester, Square.a7, Piece.blackPawn), isTrue);
+
+      // Pretend d4 isn't a good move either
+      sendServerSocketMessages(AnalysisController.socketUri, [
+        makeEvalHitEvent(uciMoves: ['e2e4', 'e7e5', 'd2d4'], bestMove: 'd7d5', cp: -2000),
+      ]);
+
+      await tester.pump(); // Wait for eval to be processed
+
+      // Move should be taken back
+      expect(boardHasPiece(tester, Square.d2, Piece.whitePawn), isTrue);
+
+      expect(find.text('You can do better'), findsOneWidget);
+      expect(find.text('Try another move for white'), findsOneWidget);
+
+      await playMove(tester, 'f2', 'f4');
+      await tester.pump(); // Wait for success message to appear
+
+      expect(find.text('Good move'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+
+      await tester.tap(find.text('Next mistake'));
+      await tester.pump();
+
+      expect(find.text("Done reviewing white's mistakes"), findsOneWidget);
+      expect(find.text("Review black's mistakes"), findsOneWidget);
+
+      await tester.tap(find.text("Review black's mistakes"));
+      await tester.pump(); // Wait for side to flip
+
+      expect(find.text('1... e5 was played'), findsOneWidget);
+      expect(find.text('Find a better move for black'), findsOneWidget);
+      expect(find.text('View the solution'), findsOneWidget);
+
+      await tester.tap(find.text('View the solution'));
+      await tester.pump();
+
+      expect(find.text('Best was 1... c5'), findsOneWidget);
+      // Correct move should be on the board
+      expect(boardHasPiece(tester, Square.c5, Piece.blackPawn), isTrue);
+
+      expect(find.text('Next mistake'), findsOneWidget);
+      await tester.tap(find.text('Next mistake'));
+      await tester.pump();
+
+      expect(find.text("Done reviewing black's mistakes"), findsOneWidget);
+      expect(find.text("Review white's mistakes"), findsOneWidget);
+    });
+
+    testWidgets('Master move is also a solution', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        await makeTestApp(
+          tester,
+          moves: 'e4 e5 Nf3',
+          evals: [
+            const ExternalEval(cp: 0, mate: null),
+            // Pretend e5 was a mistake, should've played the Sicilian obviously
+            const ExternalEval(cp: 2000, mate: null, variation: 'c5'),
+            // ... and white should've played King's gambit instead of Nf3
+            const ExternalEval(cp: -2000, mate: null, variation: 'f4'),
+          ],
+          openingExplorerEntries: {
+            'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2': OpeningExplorerEntry(
+              white: 1,
+              draws: 1,
+              black: 1,
+              moves: [
+                const OpeningMove(uci: 'a2a3', san: 'a3', white: 1, draws: 0, black: 0),
+                const OpeningMove(uci: 'd2d4', san: 'd4', white: 1, draws: 0, black: 1),
+              ].lock,
+            ),
+          }.lock,
+        ),
+      );
+
+      // Wait for retro to load
+      await tester.pump();
+
+      expect(find.text('2. Nf3 was played'), findsOneWidget);
+      expect(find.text('Find a better move for white'), findsOneWidget);
+      expect(find.text('Skip this move'), findsOneWidget);
+
+      // This move is in the database but has only been played once,
+      // so we will still consult the engine
+      await playMove(tester, 'a2', 'a3');
+
+      sendServerSocketMessages(AnalysisController.socketUri, [
+        makeEvalHitEvent(uciMoves: ['e2e4', 'e7e5', 'a2a3'], bestMove: 'a7a6', cp: -2000),
+      ]);
+
+      // Wait for failure message to appear and move to be taken back
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      expect(boardHasPiece(tester, Square.a2, Piece.whitePawn), isTrue);
+
+      // This one has been played multiple times, so it should be accepted as a solution (without consulting the engine)
+      await playMove(tester, 'd2', 'd4');
+      expect(find.text('Good move'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
+    });
+
+    testWidgets('Requests server analysis if not already running', (WidgetTester tester) async {
+      final mockAnalysisService = MockServerAnalysisService();
+      final currentAnalysis = ValueNotifier<ServerAnalysisSource?>(null);
+      final evalEvents = ValueNotifier<(ServerAnalysisSource, ServerEvalEvent)?>(null);
+      when(() => mockAnalysisService.currentAnalysis).thenReturn(currentAnalysis);
+      when(() => mockAnalysisService.lastAnalysisEvent).thenReturn(evalEvents);
+      when(
+        () => mockAnalysisService.requestAnalysis(const ServerAnalysisSource.game(gameId: testId)),
+      ).thenAnswer((_) async {
+        currentAnalysis.value = const ServerAnalysisSource.game(gameId: testId);
+      });
+
+      await tester.pumpWidget(
+        await makeTestApp(
+          tester,
+          moves: 'e4 e5',
+          alreadyHasServerAnalysis: false,
+          overrides: {
+            serverAnalysisServiceProvider: serverAnalysisServiceProvider.overrideWithValue(
+              mockAnalysisService,
+            ),
+          },
+        ),
+      );
+
+      // Wait for loading screen to appear
+      await tester.pump();
+
+      expect(find.text('Calculating moves...'), findsOneWidget);
+
+      expect(currentAnalysis.value, const ServerAnalysisSource.game(gameId: testId));
+
+      // Finish analysis
+      evalEvents.value = (
+        const ServerAnalysisSource.game(gameId: testId),
+        ServerEvalEvent(evals: <ExternalEval>[].lock, tree: {}, isAnalysisComplete: true),
+      );
+      await tester.pump(); // Wait for eval event to be processed
+      expect(find.text('No significant mistakes found for White'), findsOneWidget);
+    });
+
+    testWidgets('Does not request analysis if already running', (WidgetTester tester) async {
+      final mockAnalysisService = MockServerAnalysisService();
+      final currentAnalysis = ValueNotifier<ServerAnalysisSource?>(
+        const ServerAnalysisSource.game(gameId: testId),
+      );
+      final evalEvents = ValueNotifier<(ServerAnalysisSource, ServerEvalEvent)?>(null);
+      when(() => mockAnalysisService.currentAnalysis).thenReturn(currentAnalysis);
+      when(() => mockAnalysisService.lastAnalysisEvent).thenReturn(evalEvents);
+
+      await tester.pumpWidget(
+        await makeTestApp(
+          tester,
+          moves: 'e4 e5',
+          alreadyHasServerAnalysis: false,
+          overrides: {
+            serverAnalysisServiceProvider: serverAnalysisServiceProvider.overrideWithValue(
+              mockAnalysisService,
+            ),
+          },
+        ),
+      );
+
+      // Wait for loading screen to appear
+      await tester.pump();
+
+      expect(find.text('Calculating moves...'), findsOneWidget);
+
+      // Finish analysis
+      evalEvents.value = (
+        const ServerAnalysisSource.game(gameId: testId),
+        ServerEvalEvent(evals: <ExternalEval>[].lock, tree: {}, isAnalysisComplete: true),
+      );
+      await tester.pump(); // Wait for eval event to be processed
+      expect(find.text('No significant mistakes found for White'), findsOneWidget);
+
+      verifyNever(
+        () => mockAnalysisService.requestAnalysis(const ServerAnalysisSource.game(gameId: testId)),
+      );
+    });
+
+    testWidgets('A refused analysis request shows the reason, not the retry screen', (
+      WidgetTester tester,
+    ) async {
+      final mockAnalysisService = MockServerAnalysisService();
+      final currentAnalysis = ValueNotifier<ServerAnalysisSource?>(null);
+      final evalEvents = ValueNotifier<(ServerAnalysisSource, ServerEvalEvent)?>(null);
+      when(() => mockAnalysisService.currentAnalysis).thenReturn(currentAnalysis);
+      when(() => mockAnalysisService.lastAnalysisEvent).thenReturn(evalEvents);
+      when(
+        () => mockAnalysisService.requestAnalysis(const ServerAnalysisSource.game(gameId: testId)),
+      ).thenAnswer(
+        (_) async => throw ServerAnalysisRequestException(
+          ServerAnalysisRequestError.weeklyLimitReached,
+          'You have reached the weekly analysis limit',
+        ),
+      );
+
+      await tester.pumpWidget(
+        await makeTestApp(
+          tester,
+          moves: 'e4 e5',
+          alreadyHasServerAnalysis: false,
+          overrides: {
+            serverAnalysisServiceProvider: serverAnalysisServiceProvider.overrideWithValue(
+              mockAnalysisService,
+            ),
+          },
+        ),
+      );
+
+      // Let the refused request reject.
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      // Retro is unusable without evals, so the screen has to report why. A retry cannot help
+      // here: the refusal is the server's answer, not a flaky request.
+      expect(find.text('You have reached the weekly analysis limit'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing);
+    });
+
+    testWidgets('A failed game load still offers a retry', (WidgetTester tester) async {
+      await tester.pumpWidget(await makeTestApp(tester, moves: 'e4 e5', gameLoadFails: true));
+
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      // The game failing to load is worth retrying, so the retry screen stays.
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
+    testWidgets('Controller entry points are no-ops while state has no value', (
+      WidgetTester tester,
+    ) async {
+      final gameRequest = Completer<http.Response>();
+      await tester.pumpWidget(
+        await makeTestApp(
+          tester,
+          moves: 'e4 e5',
+          overrides: {
+            httpClientFactoryProvider: httpClientFactoryProvider.overrideWith((ref) {
+              // Hang the game request so the controller stays in the loading state,
+              // where the AsyncValue has no value at all.
+              return FakeHttpClientFactory(() => MockClient((request) => gameRequest.future));
+            }),
+          },
+        ),
+      );
+
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(tester.element(find.byType(RetroScreen)));
+      final provider = retroControllerProvider((id: testId, initialSide: Side.white));
+
+      expect(container.read(provider), isA<AsyncLoading<RetroState>>());
+
+      final controller = container.read(provider.notifier);
+
+      // All entry points must be no-ops instead of throwing a StateError
+      expect(() => controller.onUserMove(Move.parse('e2e4')!), returnsNormally);
+      expect(() => controller.userNext(), returnsNormally);
+      expect(() => controller.userPrevious(), returnsNormally);
+      expect(() => controller.viewSolution(), returnsNormally);
+      expect(() => controller.restart(), returnsNormally);
+      expect(() => controller.nextMistake(), returnsNormally);
+      await expectLater(controller.flipSide(), completes);
+
+      // Unblock the hanging request (a 404 maps to ServerException, which is never
+      // retried) so no timer is left pending when the test ends.
+      gameRequest.complete(mockResponse('', 404));
+      await tester.pump();
+    });
+  });
+}

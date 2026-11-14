@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Taldea</string>
+  <string name="teams">Taldeak</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s kide</item>
+    <item quantity="other">%s kide</item>
+  </plurals>
+  <string name="allTeams">Talde guztiak</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">Kapitain zaren taldeak</string>
+  <string name="newTeam">Talde berria</string>
+  <string name="myTeams">Nire taldeak</string>
+  <string name="noTeamFound">Ez da talderik aurkitu</string>
+  <string name="joinTeam">Taldean sartu</string>
+  <string name="quitTeam">Taldetik atera</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Taldearen kapitaina</item>
+    <item quantity="other">Taldearen kapitainak</item>
+  </plurals>
+  <string name="teamRecentMembers">Kide berriak</string>
+  <string name="willBeReviewed">Zure eskaera taldearen arduradunak gainbegiratuko du.</string>
+  <string name="beingReviewed">Taldearen arduraduna zure eskaera gainbegiratzen ari da.</string>
+  <string name="requestDeclined">Zure eskaera taldearen arduradunak ukatu egin du.</string>
+  <string name="teamBattle">Taldeen arteko txapelketa</string>
+  <string name="teamBattleOverview">Hainbat talderen arteko txapelketa, jokalari bakoitzak bere taldearentzat irabazten ditu puntuak</string>
+  <string name="teamTournament">Talde barruko txapelketa</string>
+  <string name="teamTournamentOverview">Taldeko kideak diren erabiltzaileek bakarrik parte hartu dezaketen txapelketa</string>
+  <string name="swissTournamentOverview">Zure taldeko kideek bakarrik parte hartu dezaketen txapelketa suitzarra</string>
+  <string name="teamUpdates">Taldearen eguneratzeak</string>
+  <string name="subToTeamUpdates">Harpidetu taldearen eguneratzeetara</string>
+  <string name="teamsIlead">Kapitain naizen taldeak</string>
+  <string name="leadersChat">Kapitainen txata</string>
+  <string name="introduction">Sarrera</string>
+  <string name="entryCode">Taldean sartzeko kodea</string>
+  <string name="entryCodeDescriptionForLeader">(Aukerakoa) Taldera sartzeko taldekideek idatzi beharko duten kodea.</string>
+  <string name="incorrectEntryCode">Sarrera-kode okerra.</string>
+  <string name="forumLabel">Taldearen foroa</string>
+  <string name="teamAlreadyExists">Talde hau badago.</string>
+  <string name="upcomingTournaments">Hurrengo txapelketak</string>
+  <string name="completedTourns">Amaitutako txapelketak</string>
+  <string name="joinLichessVariantTeam">Sartu %s talde ofizialera, albiste eta txapelketen berri izateko</string>
+  <string name="innerTeam">Barruko taldea</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="one">Talde %sen arteko txapelketa</item>
+    <item quantity="other">%s talderen arteko txapelketa</item>
+  </plurals>
+  <plurals name="nbLeadersPerTeam">
+    <item quantity="one">Lider bat talde bakoitzeko</item>
+    <item quantity="other">%s lider talde bakoitzeko</item>
+  </plurals>
+</resources>

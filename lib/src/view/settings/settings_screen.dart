@@ -1,0 +1,290 @@
+import 'package:app_settings/app_settings.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter_riverpod/experimental/mutation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/l10n/l10n.dart';
+import 'package:lichess_mobile/src/db/database.dart';
+import 'package:lichess_mobile/src/model/account/account_repository.dart';
+import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
+import 'package:lichess_mobile/src/model/common/preloaded_data.dart';
+import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
+import 'package:lichess_mobile/src/model/user/user.dart';
+import 'package:lichess_mobile/src/network/connectivity.dart';
+import 'package:lichess_mobile/src/styles/lichess_icons.dart';
+import 'package:lichess_mobile/src/styles/styles.dart';
+import 'package:lichess_mobile/src/utils/l10n.dart';
+import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/utils/navigation.dart';
+import 'package:lichess_mobile/src/view/home/home_tab_screen.dart';
+import 'package:lichess_mobile/src/view/settings/account_preferences_screen.dart';
+import 'package:lichess_mobile/src/view/settings/app_log_settings_screen.dart';
+import 'package:lichess_mobile/src/view/settings/board_settings_screen.dart';
+import 'package:lichess_mobile/src/view/settings/broadcast_settings_screen.dart';
+import 'package:lichess_mobile/src/view/settings/engine_settings_screen.dart';
+import 'package:lichess_mobile/src/view/settings/http_log_screen.dart';
+import 'package:lichess_mobile/src/view/settings/sound_settings_screen.dart';
+import 'package:lichess_mobile/src/view/settings/theme_settings_screen.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_action_sheet.dart';
+import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
+import 'package:lichess_mobile/src/widgets/feedback.dart';
+import 'package:lichess_mobile/src/widgets/list.dart';
+import 'package:lichess_mobile/src/widgets/misc.dart';
+import 'package:lichess_mobile/src/widgets/platform.dart';
+import 'package:lichess_mobile/src/widgets/settings.dart';
+import 'package:lichess_mobile/src/widgets/user.dart';
+import 'package:material_symbols_icons/material_symbols_icons.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class const SettingsScreen({super.key}) extends ConsumerWidget {
+  static Route<dynamic> buildRoute() {
+    return buildScreenRoute(screen: const SettingsScreen());
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOnline = ref.watch(isDeviceOnlineProvider);
+    final generalPrefs = ref.watch(generalPreferencesProvider);
+    final packageInfo = ref.read(preloadedDataProvider).requireValue.packageInfo;
+    final authUser = ref.watch(authControllerProvider);
+    final account = ref.watch(accountProvider);
+    final signOutState = ref.watch(signOutMutation);
+    final dbSize = ref.watch(getDbSizeInBytesProvider);
+
+    return PlatformScaffold(
+      appBar: PlatformAppBar(title: Text(context.l10n.settingsSettings), largeTitle: true),
+      body: ListView(
+        children: [
+          if (authUser != null)
+            ListSection(
+              hasLeading: true,
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  leading: switch (account) {
+                    AsyncData(:final User value) => AccountAvatar(value),
+                    _ => const Icon(Icons.manage_accounts_outlined),
+                  },
+                  trailing: Theme.of(context).platform == TargetPlatform.iOS
+                      ? const CupertinoListTileChevron()
+                      : null,
+                  title: Text(context.l10n.mobileAccountPreferences),
+                  enabled: isOnline,
+                  onTap: () {
+                    Navigator.of(context).push(AccountPreferencesScreen.buildRoute());
+                  },
+                ),
+              ],
+            ),
+          ListSection(
+            hasLeading: true,
+            children: [
+              SettingsListTile(
+                icon: const Icon(Icons.music_note_outlined),
+                settingsLabel: Text(context.l10n.sound),
+                settingsValue:
+                    '${soundThemeL10n(context, generalPrefs.soundTheme)} (${volumeLabel(generalPrefs.masterVolume)})',
+                onTap: () {
+                  Navigator.of(context).push(SoundSettingsScreen.buildRoute());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: Text(context.l10n.mobileTheme),
+                trailing: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+                onTap: () {
+                  Navigator.of(context).push(ThemeSettingsScreen.buildRoute());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.app_registration),
+                title: Text(context.l10n.mobileSettingsHomeWidgets),
+                trailing: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+                onTap: () {
+                  Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).push(HomeTabScreen.buildRoute(editModeEnabled: true));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Symbols.chess_pawn),
+                title: Text(context.l10n.mobileBoardSettings, overflow: TextOverflow.ellipsis),
+                trailing: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+                onTap: () {
+                  Navigator.of(context).push(BoardSettingsScreen.buildRoute());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.memory_outlined),
+                title: Text(context.l10n.mobileChessEngine, overflow: TextOverflow.ellipsis),
+                trailing: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+                onTap: () {
+                  Navigator.of(context).push(EngineSettingsScreen.buildRoute());
+                },
+              ),
+              ListTile(
+                leading: const Icon(LichessIcons.radio_tower_lichess),
+                title: Text(context.l10n.broadcastBroadcasts, overflow: .ellipsis),
+                trailing: Theme.of(context).platform == .iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+                onTap: () {
+                  Navigator.of(context).push(BroadcastSettingsScreen.buildRoute());
+                },
+              ),
+              SettingsListTile(
+                icon: const Icon(Icons.language_outlined),
+                settingsLabel: Text(context.l10n.language),
+                settingsValue: localeToLocalizedName(
+                  generalPrefs.locale ?? Localizations.localeOf(context),
+                ),
+                onTap: () {
+                  if (Theme.of(context).platform == TargetPlatform.android) {
+                    showChoicePicker<Locale>(
+                      context,
+                      choices: localesSortedByLocalizedName(AppLocalizations.supportedLocales),
+                      selectedItem: generalPrefs.locale ?? Localizations.localeOf(context),
+                      labelBuilder: (t) => Text(localeToLocalizedName(t)),
+                      onSelectedItemChanged: (Locale? locale) =>
+                          ref.read(generalPreferencesProvider.notifier).setLocale(locale),
+                    );
+                  } else {
+                    AppSettings.openAppSettings(type: AppSettingsType.appLocale);
+                  }
+                },
+              ),
+            ],
+          ),
+          ListSection(
+            hasLeading: true,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.storage_outlined),
+                title: Text(context.l10n.mobileLocalDatabaseSize),
+                trailing: dbSize.hasValue ? Text(_getSizeString(dbSize.value)) : null,
+              ),
+              ListTile(
+                leading: const Icon(Icons.http),
+                title: Text(context.l10n.mobileHttpLogs),
+                onTap: () => Navigator.push(context, HttpLogScreen.buildRoute()),
+                trailing: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+              ),
+              ListTile(
+                leading: const Icon(Icons.bug_report),
+                title: Text(context.l10n.mobileAppLogs),
+                trailing: Theme.of(context).platform == TargetPlatform.iOS
+                    ? const CupertinoListTileChevron()
+                    : null,
+                onTap: () {
+                  Navigator.of(context).push(AppLogSettingsScreen.buildRoute());
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.star_outline),
+                title: Text(context.l10n.mobileRateThisApp),
+                onTap: () async {
+                  final isAndroid = Theme.of(context).platform == TargetPlatform.android;
+                  final launched = await launchUrl(
+                    isAndroid
+                        ? Uri.parse('market://details?id=org.lichess.mobileV2')
+                        : Uri.parse('https://apps.apple.com/us/app/lichess/id1662361230'),
+                    mode: LaunchMode.externalApplication,
+                  );
+                  if (!launched && isAndroid) {
+                    launchUrl(
+                      Uri.parse(
+                        'https://play.google.com/store/apps/details?id=org.lichess.mobileV2',
+                      ),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+                trailing: const OpenInNewIcon(),
+              ),
+            ],
+          ),
+          if (authUser != null)
+            ListSection(
+              hasLeading: true,
+              children: [
+                switch (signOutState) {
+                  MutationPending() => const ListTile(
+                    leading: Icon(Icons.logout_outlined),
+                    enabled: false,
+                    title: Center(child: ButtonLoadingIndicator()),
+                  ),
+                  _ => ListTile(
+                    leading: const Icon(Icons.logout_outlined),
+                    title: Text(context.l10n.logOut),
+                    enabled: isOnline,
+                    onTap: () => _showSignOutConfirmDialog(context, ref),
+                  ),
+                },
+              ],
+            ),
+          Padding(
+            padding: Styles.bodySectionPadding,
+            child: Text('v${packageInfo.version}', style: TextTheme.of(context).bodySmall),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSignOutConfirmDialog(BuildContext context, WidgetRef ref) {
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      return showCupertinoActionSheet(
+        context: context,
+        actions: [
+          BottomSheetAction(
+            makeLabel: (context) => Text(context.l10n.logOut),
+            isDestructiveAction: true,
+            onPressed: () async {
+              await signOutMutation.run(ref, (tsx) async {
+                await tsx.get(authControllerProvider.notifier).signOut();
+              });
+            },
+          ),
+        ],
+      );
+    }
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(context.l10n.logOut),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(context.l10n.cancel),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await signOutMutation.run(ref, (tsx) async {
+                  await tsx.get(authControllerProvider.notifier).signOut();
+                });
+              },
+              child: Text(context.l10n.mobileOkButton),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getSizeString(int? bytes) => '${_bytesToMB(bytes ?? 0).toStringAsFixed(2)}MB';
+
+  double _bytesToMB(int bytes) => bytes * 0.000001;
+}

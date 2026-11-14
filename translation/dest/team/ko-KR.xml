@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">팀</string>
+  <string name="teams">팀</string>
+  <plurals name="nbMembers">
+    <item quantity="other">멤버 %s명</item>
+  </plurals>
+  <string name="allTeams">모든 팀</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">당신이 이끄는 팀</string>
+  <string name="newTeam">팀 만들기</string>
+  <string name="myTeams">소속된 팀</string>
+  <string name="noTeamFound">팀을 찾지 못했습니다</string>
+  <string name="joinTeam">팀 가입</string>
+  <string name="quitTeam">팀 탈퇴</string>
+  <plurals name="teamLeaders">
+    <item quantity="other">팀 운영자</item>
+  </plurals>
+  <string name="teamRecentMembers">최근 가입 멤버</string>
+  <string name="willBeReviewed">팀 운영자가 가입 요청을 검토할 것입니다.</string>
+  <string name="beingReviewed">팀 운영자가 가입 요청을 검토하고 있습니다.</string>
+  <string name="requestDeclined">당신의 가입 요청이 팀 리더에 의해 거절되었습니다.</string>
+  <string name="teamBattle">팀 배틀</string>
+  <string name="teamBattleOverview">각각의 플레이어가 팀의 점수를 올리는 여러 팀간의 대결</string>
+  <string name="teamTournament">팀 토너먼트</string>
+  <string name="teamTournamentOverview">팀원만 참가할 수 있는 아레나 토너먼트</string>
+  <string name="swissTournamentOverview">팀원만 참가할 수 있는 스위스 토너먼트</string>
+  <string name="teamUpdates">팀 업데이트</string>
+  <string name="subToTeamUpdates">팀 업데이트 구독하기</string>
+  <string name="teamEvents">팀 이벤트</string>
+  <string name="upcomingTeamEvents">다가오는 팀 이벤트</string>
+  <string name="teamsIlead">내가 이끄는 팀</string>
+  <string name="leadersChat">리더 채팅</string>
+  <string name="introduction">소개</string>
+  <string name="entryCode">팀 가입 코드</string>
+  <string name="entryCodeDescriptionForLeader">(선택 사항) 새 멤버가 가입하기 위해서는 코드를 반드시 알아야 합니다.</string>
+  <string name="incorrectEntryCode">코드가 잘못되었습니다.</string>
+  <string name="forumLabel">팀 포럼</string>
+  <string name="teamAlreadyExists">팀이 이미 존재합니다.</string>
+  <string name="upcomingTournaments">다가오는 토너먼트</string>
+  <string name="completedTourns">종료된 토너먼트</string>
+  <string name="joinLichessVariantTeam">%s 공식 팀을 가입하면 관련 소식과 행사에 대해 알 수 있습니다</string>
+  <string name="innerTeam">팀원 전용</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="other">%s팀의 대국</item>
+  </plurals>
+  <plurals name="nbLeadersPerTeam">
+    <item quantity="other">팀 당 리더 %s명</item>
+  </plurals>
+</resources>

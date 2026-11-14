@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="team">Lag</string>
+  <string name="teams">Lag</string>
+  <plurals name="nbMembers">
+    <item quantity="one">%s medlem</item>
+    <item quantity="other">%s medlemmar</item>
+  </plurals>
+  <string name="allTeams">Alla lag</string>
+  <string name="leaderTeams" comment="This is the button for 'teams lead by you' in the teams navigation sidebar">Lag ledda av dig</string>
+  <string name="newTeam">Nytt lag</string>
+  <string name="myTeams">Mina lag</string>
+  <string name="noTeamFound">Inget lag hittat</string>
+  <string name="joinTeam">Gå med i lag</string>
+  <string name="quitTeam">Lämna lag</string>
+  <plurals name="teamLeaders">
+    <item quantity="one">Lagledare</item>
+    <item quantity="other">Lagledare</item>
+  </plurals>
+  <string name="teamRecentMembers">Nya medlemmar</string>
+  <string name="willBeReviewed">Din förfrågan om medlemskap kommer att granskas av lagledaren.</string>
+  <string name="beingReviewed">Din förfrågan om medlemskap granskas av lagledaren.</string>
+  <string name="requestDeclined">Din begäran avvisades av en lagledare.</string>
+  <string name="teamBattle">Lagmatch</string>
+  <string name="teamBattleOverview">En kamp mellan flera lag, varje spelare plockar poäng för sitt lag</string>
+  <string name="teamTournament">Turnering inom laget</string>
+  <string name="teamTournamentOverview">En arena-turnering som endast medlemmar i ditt lag kan delta i</string>
+  <string name="swissTournamentOverview">En schweizerturnering som endast medlemmar i ditt lag kan gå med</string>
+  <string name="teamsIlead">Lag jag leder</string>
+  <string name="leadersChat">Lagledarchatt</string>
+  <string name="introduction">Introduktion</string>
+  <string name="entryCode">Lagets inträdeskod</string>
+  <string name="entryCodeDescriptionForLeader">(Valfritt) En inträdeskod som nya medlemmar måste veta för att gå med i detta lag.</string>
+  <string name="incorrectEntryCode">Felaktig kod.</string>
+  <string name="teamAlreadyExists">Det här lagnamnet finns redan.</string>
+  <string name="upcomingTournaments">Kommande turneringar</string>
+  <string name="completedTourns">Avslutade turneringar</string>
+  <string name="joinLichessVariantTeam">Gå med i det officiella %s -laget för nyheter och evenemang</string>
+  <string name="innerTeam">Inre lag</string>
+  <plurals name="battleOfNbTeams">
+    <item quantity="one">Tävling med %s lag</item>
+    <item quantity="other">Tävling med %s lag</item>
+  </plurals>
+  <plurals name="nbLeadersPerTeam">
+    <item quantity="one">En ledare per lag</item>
+    <item quantity="other">%s ledare per lag</item>
+  </plurals>
+</resources>
