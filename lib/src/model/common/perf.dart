@@ -1,7 +1,6 @@
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 
 /// Represents a lichess rating perf item
@@ -11,19 +10,7 @@ enum Perf(final String title, final String shortTitle) {
   blitz('Blitz', 'Blitz'),
   rapid('Rapid', 'Rapid'),
   classical('Classical', 'Classical'),
-  correspondence('Correspondence', 'Corresp.'),
-  fromPosition('From Position', 'From Pos.'),
-  chess960('Chess960', '960'),
-  antichess('Antichess', 'Antichess'),
-  kingOfTheHill('King of the Hill', 'KotH'),
-  threeCheck('Three-check', '3check'),
-  atomic('Atomic', 'Atomic'),
-  horde('Horde', 'Horde'),
-  racingKings('Racing Kings', 'Racing'),
-  crazyhouse('Crazyhouse', 'Crazy'),
-  puzzle('Puzzle', 'Puzzle'),
-  storm('Storm', 'Storm'),
-  streak('Streak', 'Streak');
+  correspondence('Correspondence', 'Corresp.');
 
   String label(AppLocalizations l10n) {
     switch (this) {
@@ -39,29 +26,6 @@ enum Perf(final String title, final String shortTitle) {
         return l10n.classical;
       case Perf.correspondence:
         return l10n.correspondence;
-      case Perf.fromPosition:
-        return l10n.variantFromPosition;
-      case Perf.chess960:
-        return l10n.variantChess960;
-      case Perf.antichess:
-        return l10n.variantAntichess;
-      case Perf.kingOfTheHill:
-        return l10n.variantKingOfTheHill;
-      case Perf.threeCheck:
-        return l10n.variantThreeCheck;
-      case Perf.atomic:
-        return l10n.variantAtomic;
-      case Perf.horde:
-        return l10n.variantHorde;
-      case Perf.racingKings:
-        return l10n.variantRacingKings;
-      case Perf.crazyhouse:
-        return l10n.variantCrazyhouse;
-      case Perf.puzzle:
-        return l10n.puzzles;
-      case Perf.storm:
-      case Perf.streak:
-        return title;
     }
   }
 
@@ -79,69 +43,18 @@ enum Perf(final String title, final String shortTitle) {
         return l10n.mobilePerfShortClassical;
       case Perf.correspondence:
         return l10n.mobilePerfShortCorrespondence;
-      case Perf.fromPosition:
-        return l10n.mobilePerfShortFromPosition;
-      case Perf.chess960:
-        return l10n.mobilePerfShortChess960;
-      case Perf.antichess:
-        return l10n.mobilePerfShortAntichess;
-      case Perf.kingOfTheHill:
-        return l10n.mobilePerfShortKingOfTheHill;
-      case Perf.threeCheck:
-        return l10n.mobilePerfShortThreeCheck;
-      case Perf.atomic:
-        return l10n.mobilePerfShortAtomic;
-      case Perf.horde:
-        return l10n.mobilePerfShortHorde;
-      case Perf.racingKings:
-        return l10n.mobilePerfShortRacingKings;
-      case Perf.crazyhouse:
-        return l10n.mobilePerfShortCrazyhouse;
-      case Perf.puzzle:
-        return l10n.mobilePerfShortPuzzle;
-      case Perf.storm:
-      case Perf.streak:
-        return shortTitle;
     }
   }
 
-  factory fromVariantAndSpeed(Variant variant, Speed speed) {
-    switch (variant) {
-      case Variant.standard:
-        switch (speed) {
-          case Speed.ultraBullet:
-            return Perf.ultraBullet;
-          case Speed.bullet:
-            return Perf.bullet;
-          case Speed.blitz:
-            return Perf.blitz;
-          case Speed.rapid:
-            return Perf.rapid;
-          case Speed.classical:
-            return Perf.classical;
-          case Speed.correspondence:
-            return Perf.correspondence;
-        }
-      case Variant.chess960:
-        return Perf.chess960;
-      case Variant.fromPosition:
-        return Perf.fromPosition;
-      case Variant.antichess:
-        return Perf.antichess;
-      case Variant.kingOfTheHill:
-        return Perf.kingOfTheHill;
-      case Variant.threeCheck:
-        return Perf.threeCheck;
-      case Variant.atomic:
-        return Perf.atomic;
-      case Variant.horde:
-        return Perf.horde;
-      case Variant.racingKings:
-        return Perf.racingKings;
-      case Variant.crazyhouse:
-        return Perf.crazyhouse;
-    }
-  }
+  /// The rating category of a game: on TwoStones there is one per speed.
+  factory fromSpeed(Speed speed) => switch (speed) {
+    Speed.ultraBullet => Perf.ultraBullet,
+    Speed.bullet => Perf.bullet,
+    Speed.blitz => Perf.blitz,
+    Speed.rapid => Perf.rapid,
+    Speed.classical => Perf.classical,
+    Speed.correspondence => Perf.correspondence,
+  };
 
   static final IMap<String, Perf> nameMap = IMap(Perf.values.asNameMap());
 }
@@ -166,10 +79,6 @@ extension PerfExtension on Pick {
       final valueKey = _titleKey(value);
       if (_lowerCaseTitleMap.containsKey(valueKey)) {
         return _lowerCaseTitleMap[valueKey]!;
-      }
-      switch (valueKey) {
-        case 'puzzles':
-          return Perf.puzzle;
       }
     } else if (value is Map<String, dynamic>) {
       final perf = Perf.nameMap[value['key'] as String];

@@ -188,12 +188,7 @@ class AppLinksService(final Ref ref, {AppLinks? appLinks}) {
             return [
               GameScreen.buildRoute(
                 source: ExistingGameSource(ongoing.fullId),
-                loadingPosition: (
-                  variant: ongoing.variant,
-                  fen: ongoing.fen,
-                  orientation: ongoing.orientation,
-                  lastMove: ongoing.lastMove,
-                ),
+                loadingPosition: ongoing.position,
               ),
             ];
           }

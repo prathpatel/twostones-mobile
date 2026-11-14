@@ -1,7 +1,5 @@
 import 'dart:ui';
 
-import 'package:chessground/chessground.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:dynamic_system_colors/dynamic_system_colors.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart';
 import 'package:material_color_utilities/material_color_utilities.dart';
@@ -28,15 +26,11 @@ CorePalettes? _corePalettes;
 
 ColorSchemes? _dynamicColorSchemes;
 
-ChessboardColorScheme? _boardColorScheme;
-
 /// Loads the system colors, if available (android 12+ only).
 ///
 /// Android 12 and 13 only expose the core palette (a set of tonal palettes), from which the color
 /// schemes are derived. Android 14+ additionally exposes fully resolved light and dark color
 /// schemes, which are preferred when available.
-///
-/// This also defines the system board colors, which are always derived from the core palette.
 ///
 /// This is meant to be called once during app initialization, before the first frame is rendered.
 Future<void> loadSystemColors() async {
@@ -68,7 +62,6 @@ Future<void> loadSystemColors() async {
 
   _corePalettes = palettes;
   _dynamicColorSchemes = schemes;
-  _boardColorScheme = palettes != null ? _boardColorSchemeFromPalettes(palettes) : null;
 }
 
 // The getters below check `defaultTargetPlatform`, not `Platform.isAndroid`: using the system
@@ -85,11 +78,6 @@ ColorSchemes? getDynamicColorSchemes() {
   return defaultTargetPlatform == .android ? _dynamicColorSchemes : null;
 }
 
-/// Get the board colors based on the system core palettes, if available (android 12+).
-ChessboardColorScheme? getBoardColorScheme() {
-  return defaultTargetPlatform == .android ? _boardColorScheme : null;
-}
-
 // --
 
 CorePalettes _corePalettesFromList(List<int> colors) {
@@ -98,32 +86,6 @@ CorePalettes _corePalettesFromList(List<int> colors) {
   );
 
   return CorePalettes(partition(0), partition(1), partition(2), partition(3), partition(4));
-}
-
-ChessboardColorScheme _boardColorSchemeFromPalettes(CorePalettes palettes) {
-  final darkSquare = Color(palettes.secondary.get(60));
-  final lightSquare = Color(palettes.primary.get(95));
-
-  return ChessboardColorScheme(
-    darkSquare: darkSquare,
-    lightSquare: lightSquare,
-    background: SolidColorChessboardBackground(lightSquare: lightSquare, darkSquare: darkSquare),
-    whiteCoordBackground: SolidColorChessboardBackground(
-      lightSquare: lightSquare,
-      darkSquare: darkSquare,
-      coordinates: true,
-    ),
-    blackCoordBackground: SolidColorChessboardBackground(
-      lightSquare: lightSquare,
-      darkSquare: darkSquare,
-      coordinates: true,
-      orientation: Side.black,
-    ),
-    lastMove: HighlightDetails(solidColor: Color(palettes.tertiary.get(80)).withValues(alpha: 0.6)),
-    selected: HighlightDetails(solidColor: Color(palettes.neutral.get(40)).withValues(alpha: 0.80)),
-    validMoves: Color(palettes.neutral.get(40)).withValues(alpha: 0.40),
-    validPremoves: Color(materialErrorPalette.get(40)).withValues(alpha: 0.30),
-  );
 }
 
 /// Builds the light and dark color schemes exposed by the Android OS (14+).

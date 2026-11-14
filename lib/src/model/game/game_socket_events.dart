@@ -1,18 +1,17 @@
 import 'package:clock/clock.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-import 'package:lichess_mobile/src/model/common/eval.dart';
-import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
-import 'package:lichess_mobile/src/model/game/player.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
+import 'package:lichess_mobile/src/model/go/pick.dart';
 import 'package:lichess_mobile/src/utils/json.dart';
 
 part 'game_socket_events.freezed.dart';
 
+/// The whole game, sent by the server when the game socket connects.
 @freezed
 sealed class GameFullEvent with _$GameFullEvent {
   const factory({required PlayableGame game, required int socketEventVersion}) = _GameFullEvent;
@@ -20,57 +19,55 @@ sealed class GameFullEvent with _$GameFullEvent {
   factory fromJson(Map<String, dynamic> json) {
     return GameFullEvent(
       game: PlayableGame.fromServerJson(json),
-      socketEventVersion: json['socket'] as int,
+      // The version of the game events is given with the player, as on the website.
+      socketEventVersion:
+          pick(json, 'socket').asIntOrNull() ?? pick(json, 'player', 'version').asIntOrNull() ?? 0,
     );
   }
 }
 
+/// A stone was played, or a player passed.
 @freezed
 sealed class const MoveEvent._() with _$MoveEvent {
   const factory({
+    /// The number of moves played once this one is: an even ply means White plays next.
     required int ply,
-    required String uci,
-    required String san,
-    bool? threefold,
-    bool? whiteOfferingDraw,
-    bool? blackOfferingDraw,
+
+    /// The move in SGF coordinates (`pd`), or `pass`.
+    required String move,
+
+    /// The stones after the move, as the server writes a board.
+    required String board,
+    required int blackPrisoners,
+    required int whitePrisoners,
+    @Default(IListConst<int>([])) IList<int> captured,
+    int? koPoint,
+
+    /// Whether both players passed, which starts the counting.
+    @Default(false) bool scoring,
     GameStatus? status,
     Side? winner,
     ({Duration white, Duration black, Duration? lag, DateTime at})? clock,
   }) = _MoveEvent;
 
   factory fromJson(Map<String, dynamic> json) => _socketMoveEventFromPick(pick(json).required());
+
+  /// The side that plays after this move.
+  Side get nextSide => ply.isEven ? Side.white : Side.black;
 }
 
 MoveEvent _socketMoveEventFromPick(RequiredPick pick) {
-  String uci = pick('uci').asStringOrThrow();
-
-  final promotion = pick('promotion', 'pieceClass').asStringOrNull();
-  switch (promotion) {
-    case 'queen':
-      uci += 'q';
-    case 'rook':
-      uci += 'r';
-    case 'bishop':
-      uci += 'b';
-    case 'knight':
-      uci += 'n';
-    // variants support
-    case 'pawn':
-      uci += 'p';
-    case 'king':
-      uci += 'k';
-  }
-
   return MoveEvent(
     ply: pick('ply').asIntOrThrow(),
-    uci: uci,
-    san: pick('san').asStringOrThrow(),
+    move: pick('move').asStringOrThrow(),
+    board: pick('board').asStringOrThrow(),
+    blackPrisoners: pick('prisoners', 'black').asIntOrNull() ?? 0,
+    whitePrisoners: pick('prisoners', 'white').asIntOrNull() ?? 0,
+    captured: IList(pick('captured').asListOrEmpty((point) => point.asIntOrThrow())),
+    koPoint: pick('ko').asIntOrNull(),
+    scoring: pick('scoring').asBoolOrFalse(),
     status: pick('status').asGameStatusOrNull(),
     winner: pick('winner').asSideOrNull(),
-    threefold: pick('threefold').asBoolOrNull(),
-    whiteOfferingDraw: pick('wDraw').asBoolOrNull(),
-    blackOfferingDraw: pick('bDraw').asBoolOrNull(),
     clock: pick('clock').letOrNull(
       (it) => (
         at: clock.now(),
@@ -90,6 +87,9 @@ sealed class const GameEndEvent._() with _$GameEndEvent {
     ({int white, int black})? ratingDiff,
     bool? boosted,
     ({Duration white, Duration black})? clock,
+
+    /// The count, when the game was finished by counting.
+    GoScore? score,
   }) = _GameEndEvent;
 
   factory fromJson(Map<String, dynamic> json) => _gameEndEventFromPick(pick(json).required());
@@ -108,142 +108,6 @@ GameEndEvent _gameEndEventFromPick(RequiredPick pick) {
         black: Duration(milliseconds: it('bc').asIntOrThrow() * 10),
       ),
     ),
+    score: pick('score').letOrNull(GoScore.fromPick),
   );
 }
-
-@freezed
-sealed class const ServerEvalEvent._() with _$ServerEvalEvent {
-  const factory({
-    required IList<ExternalEval> evals,
-    required Map<String, dynamic> tree,
-    ServerAnalysis? analysis,
-    GameDivision? division,
-    required bool isAnalysisComplete,
-  }) = _ServerEvalEvent;
-
-  factory fromJson(Map<String, dynamic> json) => _serverEvalEventFromPick(pick(json).required());
-}
-
-ServerEvalEvent _serverEvalEventFromPick(RequiredPick pick) {
-  final tree = pick('tree').asMapOrThrow<String, dynamic>();
-  Map<String, dynamic>? node = tree;
-  final List<ExternalEval> evals = [];
-
-  bool isAnalysisIncomplete = false;
-
-  String? nextVariation;
-
-  while (node != null) {
-    final ply = node['ply'] as int;
-    final san = node['san'] as String?;
-    final children = node['children'] as List<dynamic>?;
-    final firstChild = children?.firstOrNull as Map<String, dynamic>?;
-    final eval = node['eval'] as Map<String, dynamic>?;
-
-    if (eval == null && firstChild != null && ply <= 300 && ply > 0) {
-      isAnalysisIncomplete = true;
-    }
-
-    final glyphs = node['glyphs'] as List<dynamic>?;
-    final glyph = glyphs?.first as Map<String, dynamic>?;
-    final comments = node['comments'] as List<dynamic>?;
-    final comment = comments?.first as Map<String, dynamic>?;
-    final judgment = glyph != null && comment != null
-        ? (name: _nagToJugdmentName(glyph['id'] as int), comment: comment['text'] as String)
-        : null;
-
-    final variation = nextVariation;
-
-    final buffer = StringBuffer();
-    if (children != null && children.length > 1) {
-      Map<String, dynamic>? variationNode = children[1] as Map<String, dynamic>;
-      while (variationNode != null) {
-        final san = variationNode['san'] as String;
-        if (buffer.isEmpty) {
-          buffer.write(san);
-        } else {
-          buffer.write(' $san');
-        }
-        final nestedChildren = variationNode['children'] as List<dynamic>?;
-        if (nestedChildren != null && nestedChildren.isNotEmpty) {
-          variationNode = nestedChildren.first as Map<String, dynamic>;
-        } else {
-          break;
-        }
-      }
-    }
-    nextVariation = buffer.isEmpty ? null : buffer.toString();
-    // make it compatible with lichess API GET /game/export which doesn't return
-    // an eval of the starting position
-    // also make sure to not add an empty eval for checkmate (or stalemate) which
-    // would be the leaf node with no eval
-    if (san != null && (eval != null || firstChild != null)) {
-      evals.add(
-        ExternalEval(
-          cp: eval?['cp'] as int?,
-          mate: eval?['mate'] as int?,
-          bestMove: eval?['best'] as String?,
-          judgment: judgment,
-          variation: variation,
-        ),
-      );
-    }
-    node = firstChild;
-  }
-
-  return ServerEvalEvent(
-    tree: tree,
-    evals: evals.lock,
-    analysis: pick('analysis').letOrNull(
-      (it) => (
-        id: GameId(it('id').asStringOrThrow()),
-        white: it('white').letOrThrow(
-          (pa) => PlayerAnalysis(
-            inaccuracies: pa('inaccuracy').asIntOrThrow(),
-            mistakes: pa('mistake').asIntOrThrow(),
-            blunders: pa('blunder').asIntOrThrow(),
-            acpl: pa('acpl').asIntOrNull(),
-            accuracy: pa('accuracy').asIntOrNull(),
-            phases: pa('phases').letOrNull(
-              (p) => (
-                opening: p('opening').asIntOrNull(),
-                middlegame: p('middlegame').asIntOrNull(),
-                endgame: p('endgame').asIntOrNull(),
-              ),
-            ),
-          ),
-        ),
-        black: it('black').letOrThrow(
-          (pa) => PlayerAnalysis(
-            inaccuracies: pa('inaccuracy').asIntOrThrow(),
-            mistakes: pa('mistake').asIntOrThrow(),
-            blunders: pa('blunder').asIntOrThrow(),
-            acpl: pa('acpl').asIntOrNull(),
-            accuracy: pa('accuracy').asIntOrNull(),
-            phases: pa('phases').letOrNull(
-              (p) => (
-                opening: p('opening').asIntOrNull(),
-                middlegame: p('middlegame').asIntOrNull(),
-                endgame: p('endgame').asIntOrNull(),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-    isAnalysisComplete: !isAnalysisIncomplete,
-    division: pick('division')
-        .letOrNull((it) => (middle: it('middle').asIntOrNull(), end: it('end').asIntOrNull())),
-  );
-}
-
-String _nagToJugdmentName(int nag) => switch (nag) {
-  6 => 'Inaccuracy',
-  2 => 'Mistake',
-  4 => 'Blunder',
-  int() => '',
-};
-
-typedef ServerAnalysis = ({GameId id, PlayerAnalysis white, PlayerAnalysis black});
-
-typedef GameDivision = ({int? middle, int? end});

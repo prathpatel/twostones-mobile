@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -9,6 +8,7 @@ import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/user/user.dart' show TemporaryBan;
 import 'package:lichess_mobile/src/utils/json.dart';
 import 'package:lichess_mobile/src/utils/l10n.dart' show relativeDate;
@@ -732,8 +732,7 @@ class const ChallengeNotification(final Challenge challenge) extends LocalNotifi
       l10n,
       autoCancel: false,
       actions: <AndroidNotificationAction>[
-        if (challenge.variant.isPlaySupported)
-          AndroidNotificationAction(
+        AndroidNotificationAction(
             'accept',
             l10n.accept,
             icon: const DrawableResourceAndroidBitmap('tick'),
@@ -751,9 +750,7 @@ class const ChallengeNotification(final Challenge challenge) extends LocalNotifi
     ),
     iOS: DarwinNotificationDetails(
       threadIdentifier: channelId,
-      categoryIdentifier: challenge.variant.isPlaySupported
-          ? darwinPlayableVariantCategoryId
-          : darwinUnplayableVariantCategoryId,
+      categoryIdentifier: darwinPlayableVariantCategoryId,
     ),
   );
 

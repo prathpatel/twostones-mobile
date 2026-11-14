@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
@@ -9,6 +8,7 @@ import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_controller.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/view/game/status_l10n.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
@@ -203,13 +203,13 @@ class _GameResultDialogState() extends ConsumerState<GameResultDialog> {
                     : null,
                 child: Text(context.l10n.newOpponent, textAlign: TextAlign.center),
               ),
-            if (value.game.userAnalysable)
+            if (value.game.finished)
               FilledButton.tonal(
                 onPressed: () {
                   Navigator.of(context).popUntil((route) => route is! PopupRoute);
                   widget.onReviewCallback();
                 },
-                child: Text(context.l10n.analysis, textAlign: TextAlign.center),
+                child: const Text('Review the game', textAlign: TextAlign.center),
               ),
           ],
         ),
@@ -219,36 +219,50 @@ class _GameResultDialogState() extends ConsumerState<GameResultDialog> {
   }
 }
 
+/// The result of a finished game: the score as written in a game record, and how it ended.
 class const GameResult({required final BaseGame game, super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final showWinner = game.winner != null
-        ? ' • ${game.winner == Side.white ? context.l10n.whiteIsVictorious : context.l10n.blackIsVictorious}'
-        : '';
+    final result = game.resultString;
+    final score = game.scoring?.score;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (game.status.value >= GameStatus.mate.value)
+        if (result != null)
           Text(
-            game.winner == null
-                ? '½-½'
-                : game.winner == Side.white
-                ? '1-0'
-                : '0-1',
-            style: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+            result == '0' ? 'Jigo' : result,
+            style: const TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
         const SizedBox(height: 6.0),
         Text(
-          '${gameStatusL10n(context, variant: game.meta.variant, status: game.status, lastPosition: game.lastPosition, winner: game.winner, isThreefoldRepetition: game.isThreefoldRepetition)}$showWinner',
+          gameStatusL10n(
+            context,
+            status: game.status,
+            lastPosition: game.lastPosition,
+            winner: game.winner,
+          ),
           style: const TextStyle(fontStyle: FontStyle.italic),
           textAlign: TextAlign.center,
         ),
+        if (score != null && game.status == GameStatus.variantEnd ||
+            score != null && game.status == GameStatus.draw) ...[
+          const SizedBox(height: 6.0),
+          Text(
+            '${context.l10n.black} ${_formatPoints(score.black)} • '
+            '${context.l10n.white} ${_formatPoints(score.white)} '
+            '(komi ${_formatPoints(score.komi)})',
+            textAlign: TextAlign.center,
+          ),
+        ],
       ],
     );
   }
 }
+
+String _formatPoints(double points) =>
+    points == points.roundToDouble() ? points.toStringAsFixed(0) : points.toStringAsFixed(1);
 
 class const _ResultDialog({required final Widget child}) extends StatelessWidget {
   @override

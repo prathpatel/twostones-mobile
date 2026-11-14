@@ -1,39 +1,33 @@
 import 'dart:async';
 
 import 'package:collection/collection.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:lichess_mobile/src/binding/binding.dart';
 import 'package:lichess_mobile/src/model/account/account_preferences.dart';
-import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
 import 'package:lichess_mobile/src/model/chat/chat.dart';
 import 'package:lichess_mobile/src/model/chat/chat_mixin.dart';
-import 'package:lichess_mobile/src/model/clock/chess_clock.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
+import 'package:lichess_mobile/src/model/clock/game_clock.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/socket.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
-import 'package:lichess_mobile/src/model/game/exported_game.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_preferences.dart';
-import 'package:lichess_mobile/src/model/game/game_repository.dart';
 import 'package:lichess_mobile/src/model/game/game_socket_events.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
 import 'package:lichess_mobile/src/model/game/game_storage.dart';
-import 'package:lichess_mobile/src/model/game/material_diff.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
+import 'package:lichess_mobile/src/model/go/pick.dart';
 import 'package:lichess_mobile/src/network/socket.dart';
 import 'package:lichess_mobile/src/service/account_service.dart';
-import 'package:lichess_mobile/src/service/correspondence_service.dart';
 import 'package:lichess_mobile/src/service/move_feedback.dart';
 import 'package:lichess_mobile/src/service/sound_service.dart';
+import 'package:lichess_mobile/src/utils/json.dart';
 import 'package:lichess_mobile/src/utils/rate_limit.dart';
 import 'package:logging/logging.dart';
 
@@ -46,19 +40,17 @@ final gameControllerProvider = AsyncNotifierProvider.autoDispose
       name: 'GameControllerProvider',
     );
 
-/// Returns the [PlayableGame] with the local account preferences applied if the server didn't send any preferences.
+/// Returns the [PlayableGame] with the local account preferences applied where the server did not
+/// send them.
 PlayableGame _withLocalAccountPrefsFallback(PlayableGame game, AccountPrefState prefs) {
-  if (game.prefs != null) {
-    return game;
-  }
-
+  final serverPrefs = game.prefs;
   return game.copyWith(
     prefs: ServerGamePrefs(
       showRatings: prefs.showRatings == ShowRatings.yes,
-      enablePremove: prefs.premove.value,
-      autoQueen: prefs.autoQueen,
-      confirmResign: prefs.confirmResign.value,
-      submitMove: _submitMoveEnabledForSpeed(prefs.submitMove, game.meta.speed),
+      confirmResign: serverPrefs?.confirmResign ?? prefs.confirmResign.value,
+      submitMove:
+          (serverPrefs?.submitMove ?? false) ||
+          _submitMoveEnabledForSpeed(prefs.submitMove, game.meta.speed),
       zenMode: prefs.zenMode,
     ),
   );
@@ -74,6 +66,10 @@ bool _submitMoveEnabledForSpeed(SubmitMove submitMove, Speed speed) {
   };
 }
 
+/// Plays and follows a game of Go on the server, over the game socket.
+///
+/// The server is authoritative. A move played here is shown at once, then confirmed by the `move`
+/// event of the server, whose board replaces the local one.
 class GameController(final GameFullId gameFullId)
     extends AsyncNotifier<GameState>
     with ChatMixin<GameState> {
@@ -105,11 +101,9 @@ class GameController(final GameFullId gameFullId)
 
   SocketPool get _socketPool => ref.read(socketPoolProvider);
 
-  ChessClock? _clock;
+  GameClock? _clock;
 
   late SocketClient _socketClient;
-
-  GameRepository get _gameRepository => ref.read(gameRepositoryProvider);
 
   @protected
   @override
@@ -162,43 +156,34 @@ class GameController(final GameFullId gameFullId)
     final fullEvent = GameFullEvent.fromJson(rawFullEvent.data as Map<String, dynamic>);
     _socketClient.version = fullEvent.socketEventVersion;
 
-    final game = fullEvent.game.prefs != null
-        ? fullEvent.game
-        : _withLocalAccountPrefsFallback(
-            fullEvent.game,
-            await ref.read(accountPreferencesProvider.future),
-          );
+    final game = _withLocalAccountPrefsFallback(
+      fullEvent.game,
+      await ref.read(accountPreferencesProvider.future),
+    );
 
     // Play "dong" sound when this is a new game and we're playing it (not spectating)
     final isMyGame = game.youAre != null;
-    final noMovePlayed = game.steps.length == 1;
-    if (isMyGame && noMovePlayed && game.status == GameStatus.started) {
+    if (isMyGame && game.moveCount == 0 && game.status == GameStatus.started) {
       ref.read(soundServiceProvider).play(Sound.dong);
     }
 
     if (game.clock != null) {
-      _clock = ChessClock(
+      _clock = GameClock(
         whiteTime: game.clock!.white,
         blackTime: game.clock!.black,
         emergencyThreshold: game.meta.clock?.emergency,
         onEmergency: onClockEmergency,
         onFlag: onFlag,
       );
-      if (game.clock!.running) {
-        final pos = game.lastPosition;
-        if (pos.fullmoves > 1) {
-          _clock!.startSide(pos.turn);
-        }
-      }
     }
 
     if (game.finished) {
-      _onFinishedGameLoad(fullEvent.game);
+      _storeGame(game);
     }
 
     _initialZenPref = game.prefs?.zenMode;
 
-    return GameState(
+    final initialState = GameState(
       gameFullId: gameFullId,
       game: game,
       stepCursor: game.steps.length - 1,
@@ -206,6 +191,13 @@ class GameController(final GameFullId gameFullId)
       chatState: await initChat(game.chat),
       chatDisabledViaPrefs: ref.read(gamePreferencesProvider).enableChat == false,
     );
+
+    final activeSide = initialState.activeClockSide;
+    if (activeSide != null && game.clock?.running == true) {
+      _clock?.startSide(activeSide);
+    }
+
+    return initialState;
   }
 
   @override
@@ -220,8 +212,10 @@ class GameController(final GameFullId gameFullId)
 
     _wasInBackground = true;
 
-    // real time games need the socket to stay connected otherwise lichess will think the player left
-    // correspondence games can and should close the socket when the app is in background (because lichess won't send the push notification update when the player is still connected to the socket)
+    // real time games need the socket to stay connected otherwise the server will think the player
+    // left; correspondence games can and should close the socket when the app is in background
+    // (because the server won't send the push notification update when the player is still
+    // connected to the socket)
     if (state.requireValue.game.meta.speed == Speed.correspondence) {
       _socketClient.close();
     }
@@ -246,49 +240,88 @@ class GameController(final GameFullId gameFullId)
     }
   }
 
-  void userMove(Move move, {bool? viaDragAndDrop, bool? isPremove}) {
-    final curState = state.requireValue;
+  /// Called when the player taps a point of the board.
+  ///
+  /// During play it places a stone when it is the player's turn; in the scoring phase it marks or
+  /// unmarks the group on that point as dead.
+  void onTapPoint(int point) {
+    final curState = state.value;
+    if (curState == null) return;
+    final game = curState.game;
+    if (game.youAre == null || !game.playable) return;
 
-    final (Position, String) sanResult;
+    if (game.inScoringPhase) {
+      if (game.lastPosition.board[point] != null) {
+        _socketClient.send('scoring-toggle', point);
+      }
+      return;
+    }
+
+    if (curState.isReplaying) {
+      cursorAt(game.steps.length - 1);
+      return;
+    }
+
+    if (!game.isMyTurn) return;
+
+    final move = GoMove.play(point);
+
+    // tapping the stone that waits for a confirmation again takes it back
+    if (curState.moveToConfirm == move) {
+      cancelMove();
+      return;
+    }
+
+    final error = game.lastPosition.errorOf(move);
+    if (error != null) {
+      state = AsyncValue.data(curState.copyWith(moveError: error));
+      ref.read(soundServiceProvider).play(Sound.error);
+      return;
+    }
+
+    if (curState.shouldConfirmMove) {
+      state = AsyncValue.data(curState.copyWith(moveToConfirm: move, moveError: null));
+      _moveFeedback(game.lastPosition.play(move));
+      return;
+    }
+
+    _playMove(curState, move);
+  }
+
+  /// Passes the turn. Two passes in a row stop play and start the counting.
+  void pass() {
+    final curState = state.value;
+    if (curState == null) return;
+    final game = curState.game;
+    if (game.youAre == null || !game.playable || !game.isMyTurn || game.inScoringPhase) return;
+    _playMove(curState.copyWith(moveToConfirm: null), const GoMove.pass());
+  }
+
+  void _playMove(GameState curState, GoMove move) {
+    final GoPosition newPosition;
     try {
-      sanResult = curState.game.lastPosition.makeSan(move);
-    } on PlayException catch (e, st) {
-      LichessBinding.instance.firebaseCrashlytics.recordError(
-        'Invalid user move: $e',
-        st,
-        reason: 'PlayException thrown when making SAN of user move',
-        information: ['move: $move', 'position: ${curState.game.lastPosition}'],
-      );
-      _logger.warning('Invalid user move:', e, st);
+      newPosition = curState.game.lastPosition.play(move);
+    } on GoMoveException catch (e) {
+      state = AsyncValue.data(curState.copyWith(moveToConfirm: null, moveError: e.error));
       return;
     }
-    final (newPos, newSan) = sanResult;
-    final sanMove = SanMove(newSan, move);
-
-    if (curState.shouldConfirmMove && isPremove != true) {
-      state = AsyncValue.data(curState.copyWith(moveToConfirm: move));
-      _playMoveFeedback(sanMove, skipAnimationDelay: viaDragAndDrop ?? false);
-      return;
-    }
-
-    final newStep = GameStep(
-      position: newPos,
-      sanMove: sanMove,
-      diff: MaterialDiff.fromPosition(newPos),
-    );
 
     state = AsyncValue.data(
       curState.copyWith(
-        game: curState.game.copyWith(steps: curState.game.steps.add(newStep)),
-        stepCursor: curState.stepCursor + 1,
+        game: curState.game.copyWith(
+          steps: curState.game.steps.add(GameStep(position: newPosition, move: move)),
+          koPoint: newPosition.koPoint,
+        ),
+        stepCursor: curState.game.steps.length,
+        moveToConfirm: null,
+        moveError: null,
       ),
     );
 
-    _playMoveFeedback(sanMove, skipAnimationDelay: viaDragAndDrop ?? false);
+    _moveFeedback(newPosition);
 
     _sendMoveToSocket(
-      move,
-      isPremove: isPremove ?? false,
+      move.key(curState.game.meta.boardSize),
       // same logic as web client
       // we want to send client lag only at the beginning of the game when the clock is not running yet
       withLag: curState.game.clock != null && curState.activeClockSide == null,
@@ -298,19 +331,7 @@ class GameController(final GameFullId gameFullId)
   /// Called if the player cancels the move when confirm move preference is enabled
   void cancelMove() {
     final curState = state.requireValue;
-    if (curState.game.steps.isEmpty) {
-      assert(false, 'game steps cannot be empty on cancel move');
-      return;
-    }
-    final (GameState newState, bool _) = _tryCancelMoveConfirmation(curState);
-    state = AsyncValue.data(newState);
-  }
-
-  (GameState, bool) _tryCancelMoveConfirmation(GameState curState) {
-    if (curState.moveToConfirm == null) {
-      return (curState, false);
-    }
-    return (curState.copyWith(moveToConfirm: null), true);
+    state = AsyncValue.data(curState.copyWith(moveToConfirm: null));
   }
 
   /// Called if the player confirms the move when confirm move preference is enabled
@@ -321,61 +342,20 @@ class GameController(final GameFullId gameFullId)
       assert(false, 'moveToConfirm must not be null on confirm move');
       return;
     }
-
-    final (Position, String) sanResult;
-    try {
-      sanResult = curState.game.lastPosition.makeSan(moveToConfirm);
-    } on PlayException catch (e, st) {
-      LichessBinding.instance.firebaseCrashlytics.recordError(
-        'Invalid confirm move: $e',
-        st,
-        reason: 'PlayException thrown when making SAN of confirm move',
-        information: ['move: $moveToConfirm', 'position: ${curState.game.lastPosition}'],
-      );
-      _logger.warning('Invalid confirm move:', e, st);
-      state = AsyncValue.data(curState.copyWith(moveToConfirm: null));
-      return;
-    }
-    final (newPos, newSan) = sanResult;
-    final sanMove = SanMove(newSan, moveToConfirm);
-    final newStep = GameStep(
-      position: newPos,
-      sanMove: sanMove,
-      diff: MaterialDiff.fromPosition(newPos),
-    );
-
-    state = AsyncValue.data(
-      curState.copyWith(
-        game: curState.game.copyWith(steps: curState.game.steps.add(newStep)),
-        stepCursor: curState.stepCursor + 1,
-        moveToConfirm: null,
-      ),
-    );
-
     ref.read(soundServiceProvider).play(.confirmation);
-
-    _sendMoveToSocket(
-      moveToConfirm,
-      isPremove: false,
-      // same logic as web client
-      // we want to send client lag only at the beginning of the game when the clock is not running yet
-      withLag: curState.game.clock != null && curState.activeClockSide == null,
-    );
+    _playMove(curState, moveToConfirm);
   }
 
   void cursorAt(int cursor) {
     if (state.hasValue) {
-      final currentCursor = state.requireValue.stepCursor;
-      if (currentCursor == cursor) {
+      final curState = state.requireValue;
+      final clamped = cursor.clamp(0, curState.game.steps.length - 1);
+      if (curState.stepCursor == clamped) {
         return;
       }
-      final (newState, _) = _tryCancelMoveConfirmation(state.requireValue);
-      state = AsyncValue.data(newState.copyWith(stepCursor: cursor));
-      final san = state.requireValue.game.stepAt(cursor).sanMove?.san;
-      if (san != null) {
-        _playReplayMoveSound(san);
-        HapticFeedback.lightImpact();
-      }
+      state = AsyncValue.data(curState.copyWith(stepCursor: clamped, moveToConfirm: null));
+      _replayFeedback(curState.game.positionAt(clamped));
+      HapticFeedback.lightImpact();
     }
   }
 
@@ -384,10 +364,7 @@ class GameController(final GameFullId gameFullId)
       final curState = state.requireValue;
       if (curState.stepCursor < curState.game.steps.length - 1) {
         state = AsyncValue.data(curState.copyWith(stepCursor: curState.stepCursor + 1));
-        final san = curState.game.stepAt(curState.stepCursor + 1).sanMove?.san;
-        if (san != null) {
-          _playReplayMoveSound(san);
-        }
+        _replayFeedback(curState.game.positionAt(curState.stepCursor + 1));
       }
     }
   }
@@ -395,15 +372,11 @@ class GameController(final GameFullId gameFullId)
   void cursorBackward() {
     if (state.hasValue) {
       final curState = state.requireValue;
-      if (curState.stepCursor > 0) {
-        final (newState, didCancel) = _tryCancelMoveConfirmation(curState);
-        state = AsyncValue.data(
-          newState.copyWith(stepCursor: didCancel ? newState.stepCursor : newState.stepCursor - 1),
-        );
-        final san = state.requireValue.game.stepAt(state.requireValue.stepCursor).sanMove?.san;
-        if (san != null) {
-          _playReplayMoveSound(san);
-        }
+      if (curState.moveToConfirm != null) {
+        state = AsyncValue.data(curState.copyWith(moveToConfirm: null));
+      } else if (curState.stepCursor > 0) {
+        state = AsyncValue.data(curState.copyWith(stepCursor: curState.stepCursor - 1));
+        _replayFeedback(curState.game.positionAt(curState.stepCursor - 1));
       }
     }
   }
@@ -428,7 +401,10 @@ class GameController(final GameFullId gameFullId)
   void toggleMoveConfirmation() {
     final curState = state.requireValue;
     state = AsyncValue.data(
-      curState.copyWith(moveConfirmSettingOverride: !(curState.moveConfirmSettingOverride ?? true)),
+      curState.copyWith(
+        moveConfirmSettingOverride: !curState.shouldConfirmMove,
+        moveToConfirm: null,
+      ),
     );
   }
 
@@ -443,13 +419,6 @@ class GameController(final GameFullId gameFullId)
       curState.copyWith.game(prefs: curState.game.prefs?.copyWith(zenMode: newZen)),
     );
     ref.read(accountPreferencesProvider.notifier).setZen(newZen);
-  }
-
-  void toggleAutoQueen() {
-    final curState = state.requireValue;
-    state = AsyncValue.data(
-      curState.copyWith(autoQueenSettingOverride: !(curState.autoQueenSettingOverride ?? true)),
-    );
   }
 
   void onToggleChat(bool isChatEnabled) {
@@ -481,12 +450,6 @@ class GameController(final GameFullId gameFullId)
     _socketClient.send('moretime', null);
   }
 
-  void berserk() {
-    if (state.value?.canBerserk == true && state.value?.hasBerserked == false) {
-      _socketClient.send('berserk', null);
-    }
-  }
-
   void abortGame() {
     _socketClient.send('abort', null);
   }
@@ -497,22 +460,6 @@ class GameController(final GameFullId gameFullId)
 
   void forceResign() {
     _socketClient.send('resign-force', null);
-  }
-
-  void forceDraw() {
-    _socketClient.send('draw-force', null);
-  }
-
-  void claimDraw() {
-    _socketClient.send('draw-claim', null);
-  }
-
-  void offerOrAcceptDraw() {
-    _socketClient.send('draw-yes', null);
-  }
-
-  void cancelOrDeclineDraw() {
-    _socketClient.send('draw-no', null);
   }
 
   void offerTakeback() {
@@ -529,6 +476,17 @@ class GameController(final GameFullId gameFullId)
 
   void proposeOrAcceptRematch() {
     _socketClient.send('rematch-yes', null);
+  }
+
+  /// Accepts the count shown in the scoring phase. The game ends once both players accepted it.
+  void acceptScore() {
+    _socketClient.send('scoring-accept', null);
+  }
+
+  /// Leaves the scoring phase and goes back to playing, when the players disagree on the dead
+  /// stones.
+  void resumePlay() {
+    _socketClient.send('scoring-resume', null);
   }
 
   Future<void> challengeRematch() async {
@@ -581,25 +539,15 @@ class GameController(final GameFullId gameFullId)
     }
   }
 
-  void _sendMoveToSocket(Move move, {required bool isPremove, required bool withLag}) {
-    final thinkTime = _clock?.stop();
-    final moveTime = _clock != null
-        ? isPremove == true
-              ? Duration.zero
-              : thinkTime
-        : null;
-
-    final (topic, data) = switch (move) {
-      NormalMove() => ('move', {'u': move.uci}),
-      DropMove(:final role, :final to) => ('drop', {'role': role.name, 'pos': to.name}),
-    };
+  void _sendMoveToSocket(String moveKey, {required bool withLag}) {
+    final moveTime = _clock?.stop();
 
     final withBlur = _wasInBackground;
     _wasInBackground = false;
     _socketClient.send(
-      topic,
+      'move',
       {
-        ...data,
+        'm': moveKey,
         if (moveTime != null) 's': (moveTime.inMilliseconds * 0.1).round().toRadixString(36),
         if (withBlur) 'b': 1,
       },
@@ -607,44 +555,25 @@ class GameController(final GameFullId gameFullId)
       withLag: _clock != null && (moveTime == null || withLag),
     );
 
+    _transientMoveTimer?.cancel();
     _transientMoveTimer = Timer(const Duration(seconds: 10), _reloadGame);
   }
 
-  /// Move feedback while playing
-  void _playMoveFeedback(SanMove sanMove, {bool skipAnimationDelay = false}) {
-    final pieceAnimationDuration = state.value?.hasPieceAnimation == true
-        ? ref.read(boardPreferencesProvider).pieceAnimationDuration
-        : Duration.zero;
-    final delay = pieceAnimationDuration ~/ 2;
-
-    if (skipAnimationDelay || delay <= Duration.zero) {
-      _moveFeedback(sanMove);
+  /// Sound and vibration of a stone played in the game.
+  void _moveFeedback(GoPosition position) {
+    if (position.captured.isNotEmpty) {
+      ref.read(moveFeedbackServiceProvider).captureFeedback();
     } else {
-      Timer(delay, () {
-        _moveFeedback(sanMove);
-      });
+      ref.read(moveFeedbackServiceProvider).moveFeedback();
     }
   }
 
-  void _moveFeedback(SanMove sanMove) {
-    final isCheck = sanMove.san.contains('+');
-    if (sanMove.san.contains('x')) {
-      ref
-          .read(moveFeedbackServiceProvider)
-          .captureFeedback(state.requireValue.game.meta.variant, check: isCheck);
-    } else {
-      ref.read(moveFeedbackServiceProvider).moveFeedback(check: isCheck);
-    }
-  }
-
-  /// Play the sound when replaying moves
-  void _playReplayMoveSound(String san) {
-    final soundService = ref.read(soundServiceProvider);
-    if (san.contains('x')) {
-      soundService.play(Sound.capture);
-    } else {
-      soundService.play(Sound.move);
-    }
+  /// Sound of a stone when going through the moves of the game.
+  void _replayFeedback(GoPosition position) {
+    if (position.lastMove == null) return;
+    ref
+        .read(soundServiceProvider)
+        .play(position.captured.isNotEmpty ? Sound.capture : Sound.move);
   }
 
   /// Reload game
@@ -668,13 +597,6 @@ class GameController(final GameFullId gameFullId)
     if (!state.hasValue) {
       if (event.version != null) {
         _logger.warning('received $event while game state not yet available');
-        // not sure whether this can happen so log it
-        LichessBinding.instance.firebaseCrashlytics.recordError(
-          'received $event while game state not yet available',
-          null,
-          reason: 'versioned socket event received before game state available',
-          information: ['event.type: ${event.topic}'],
-        );
       }
       return;
     }
@@ -699,14 +621,13 @@ class GameController(final GameFullId gameFullId)
         final isOpponentOnGame =
             newGame.playerOf(newGame.youAre?.opposite ?? Side.white).onGame ?? false;
 
-        // A pending (unconfirmed) move was selected for the previous live
-        // position. If the server resync changed that position (e.g. a takeback),
-        // the move could be applied to a different position and render an illegal
-        // one, so it must be dropped.
-        final positionChanged = newGame.lastPosition.fen != curState.game.lastPosition.fen;
+        // A pending (unconfirmed) move was chosen for the previous live position. If the server
+        // resync changed that position (e.g. a takeback), the move must be dropped.
+        final positionChanged =
+            newGame.lastPosition.boardString != curState.game.lastPosition.boardString;
 
         state = AsyncValue.data(
-          state.requireValue.copyWith(
+          curState.copyWith(
             game: newGame,
             // Clamp in case a takeback happened to prevent problems with cursorForward()
             stepCursor: curState.isReplaying
@@ -721,7 +642,7 @@ class GameController(final GameFullId gameFullId)
           _updateClock(
             white: newGame.clock!.white,
             black: newGame.clock!.black,
-            activeSide: state.requireValue.activeClockSide,
+            activeSide: newGame.clock!.running ? state.requireValue.activeClockSide : null,
           );
         }
 
@@ -744,179 +665,30 @@ class GameController(final GameFullId gameFullId)
           _reloadGame();
         }
 
-      // Move event, received after sending a move or receiving a move from the
-      // opponent
-      case 'move' || 'drop':
+      // Move event, received after sending a move or receiving a move from the opponent
+      case 'move':
+        _onMoveEvent(MoveEvent.fromJson(event.data as Map<String, dynamic>));
+
+      // The dead stones or the acceptances of the scoring phase changed
+      case 'scoring':
+        final scoring = GoScoring.fromServerJson(event.data as Map<String, dynamic>);
+        state = AsyncValue.data(state.requireValue.copyWith.game(scoring: scoring));
+
+      // The clocks were set by the server, e.g. after a takeback or when play resumes
+      case 'clock':
+        final data = pick(event.data).required();
+        final white = data('white').asDurationFromSecondsOrNull();
+        final black = data('black').asDurationFromSecondsOrNull();
         final curState = state.requireValue;
-        final data = MoveEvent.fromJson(event.data as Map<String, dynamic>);
-        final playedSide = data.ply.isOdd ? Side.white : Side.black;
-
-        GameState newState = curState.copyWith(
-          game: curState.game.copyWith(
-            isThreefoldRepetition: data.threefold,
-            winner: data.winner,
-            status: data.status ?? curState.game.status,
-            // Update forecast: keep only the lines with the move that was just played and remove the first move
-            correspondenceForecast: curState.game.correspondenceForecast
-                ?.where((line) => line.firstOrNull?.move.uci == data.uci)
-                .map((line) => line.removeAt(0))
-                .where((line) => line.isNotEmpty)
-                .toIList(),
-          ),
-        );
-
-        if (playedSide == curState.game.youAre) {
-          _transientMoveTimer?.cancel();
+        if (white != null && black != null && curState.game.clock != null) {
+          final newState = curState.copyWith.game.clock!(white: white, black: black);
+          state = AsyncValue.data(newState);
+          _updateClock(white: white, black: black, activeSide: newState.activeClockSide);
         }
-
-        // add opponent move
-        if (data.ply == curState.game.lastPly + 1) {
-          final lastPos = curState.game.lastPosition;
-          final move = Move.parse(data.uci)!;
-          final sanMove = SanMove(data.san, move);
-          final newPos = lastPos.playUnchecked(move);
-          final newStep = GameStep(
-            sanMove: sanMove,
-            position: newPos,
-            diff: MaterialDiff.fromPosition(newPos),
-          );
-
-          newState = newState.copyWith(
-            game: newState.game.copyWith(steps: newState.game.steps.add(newStep)),
-            // Clear any pending move confirmation since the position has changed.
-            moveToConfirm: null,
-          );
-
-          if (!curState.isReplaying) {
-            newState = newState.copyWith(stepCursor: newState.stepCursor + 1);
-
-            _playMoveFeedback(sanMove);
-          }
-        }
-
-        if (data.clock != null) {
-          final lag = newState.game.playable && newState.game.isMyTurn
-              // my own clock doesn't need to be compensated for
-              ? Duration.zero
-              // server will send the lag only if it's more than 10ms
-              // default lag of 10ms is also used by web client
-              : data.clock?.lag ?? const Duration(milliseconds: 10);
-
-          _updateClock(
-            white: data.clock!.white,
-            black: data.clock!.black,
-            lag: lag,
-            activeSide: newState.activeClockSide,
-          );
-
-          if (newState.game.clock != null) {
-            // we don't rely on these values to display the clock, but let's keep
-            // the game object in sync
-            newState = newState.copyWith.game.clock!(
-              white: data.clock!.white,
-              black: data.clock!.black,
-            );
-          } else if (newState.game.correspondenceClock != null) {
-            newState = newState.copyWith.game.correspondenceClock!(
-              white: data.clock!.white,
-              black: data.clock!.black,
-              resetId: DateTime.now().millisecondsSinceEpoch,
-            );
-          }
-        }
-
-        if (newState.game.expiration != null) {
-          if (newState.game.steps.length > 2) {
-            newState = newState.copyWith.game(expiration: null);
-          } else {
-            newState = newState.copyWith.game(
-              expiration: (
-                idle: newState.game.expiration!.idle,
-                timeToMove: curState.game.expiration!.timeToMove,
-                movedAt: DateTime.now(),
-              ),
-            );
-          }
-        }
-
-        if (curState.game.meta.speed == Speed.correspondence) {
-          ref.read(correspondenceServiceProvider).updateStoredGame(gameFullId, newState.game);
-          ref.read(ongoingGamesProvider.notifier).updateGame(gameFullId, newState.game);
-        }
-
-        state = AsyncValue.data(newState);
 
       // End game event
       case 'endData':
-        final endData = GameEndEvent.fromJson(event.data as Map<String, dynamic>);
-
-        // A move (typically an auto-fired premove) may have been applied
-        // optimistically to the board but never confirmed by the server because
-        // the game ended first — e.g. the player flagged, so the premove was
-        // rejected. The transient move timer is still active in that case. Roll
-        // the unconfirmed move back so the final position (and the result text
-        // derived from it) matches the server.
-        // See https://github.com/lichess-org/mobile/issues/2130.
-        GameState curState = state.requireValue;
-        if (_transientMoveTimer?.isActive == true && curState.game.steps.length > 1) {
-          final confirmedSteps = curState.game.steps.removeLast();
-          curState = curState.copyWith(
-            game: curState.game.copyWith(steps: confirmedSteps),
-            stepCursor: curState.stepCursor.clamp(0, confirmedSteps.length - 1),
-            moveToConfirm: null,
-          );
-          state = AsyncValue.data(curState);
-        }
-        _transientMoveTimer?.cancel();
-
-        GameState newState = curState.copyWith(
-          game: curState.game.copyWith(
-            status: endData.status,
-            winner: endData.winner,
-            boosted: endData.boosted,
-            white: curState.game.white.copyWith(ratingDiff: endData.ratingDiff?.white),
-            black: curState.game.black.copyWith(ratingDiff: endData.ratingDiff?.black),
-          ),
-        );
-
-        if (endData.clock != null) {
-          newState = newState.copyWith.game.clock!(
-            white: endData.clock!.white,
-            black: endData.clock!.black,
-          );
-          _updateClock(
-            white: endData.clock!.white,
-            black: endData.clock!.black,
-            activeSide: newState.activeClockSide,
-          );
-        }
-
-        if (curState.game.lastPosition.fullmoves > 1) {
-          Timer(const Duration(milliseconds: 500), () {
-            if (!ref.mounted) return;
-            ref.read(soundServiceProvider).play(Sound.dong);
-          });
-        }
-
-        if (curState.game.meta.speed == Speed.correspondence) {
-          ref.read(correspondenceServiceProvider).updateStoredGame(gameFullId, newState.game);
-          ref.read(ongoingGamesProvider.notifier).updateGame(gameFullId, newState.game);
-        }
-
-        state = AsyncValue.data(newState);
-
-        if (!newState.game.aborted) {
-          _getPostGameData()
-              .then((data) {
-                if (!ref.mounted) return;
-                final game = _mergePostGameData(state.requireValue.game, data);
-                state = AsyncValue.data(state.requireValue.copyWith(game: game));
-                _storeGame(game);
-              })
-              .catchError((Object e, StackTrace s) {
-                _logger.warning('Could not get post game data', e, s);
-              });
-        }
+        _onEndEvent(GameEndEvent.fromJson(event.data as Map<String, dynamic>));
 
       case 'clockInc':
         final data = event.data as Map<String, dynamic>;
@@ -925,7 +697,7 @@ class GameController(final GameFullId gameFullId)
             .letOrNull((it) => Duration(milliseconds: it.asIntOrThrow() * 10));
         final curState = state.requireValue;
 
-        if (side != null && newClock != null) {
+        if (side != null && newClock != null && curState.game.clock != null) {
           _clock?.setTime(side, newClock);
 
           // sync game clock object even if it's not used to display the clock
@@ -986,29 +758,9 @@ class GameController(final GameFullId gameFullId)
           state.requireValue.copyWith(opponentLeftCountdown: (timeLeft, DateTime.now())),
         );
 
-      // Event sent when a player adds or cancels a draw offer
-      case 'drawOffer':
-        final side = pick(event.data).asSideOrNull();
-        final curState = state.requireValue;
-        state = AsyncValue.data(
-          curState.copyWith(
-            lastDrawOfferAtPly: side != null && side == curState.game.youAre
-                ? curState.game.lastPly
-                : curState.lastDrawOfferAtPly,
-            game: curState.game.copyWith(
-              white: curState.game.white.copyWith(
-                offeringDraw: side == null ? null : side == Side.white,
-              ),
-              black: curState.game.black.copyWith(
-                offeringDraw: side == null ? null : side == Side.black,
-              ),
-            ),
-          ),
-        );
-
       // Event sent when a player adds or cancels a takeback offer
       case 'takebackOffers':
-        final data = event.data as Map<String, dynamic>;
+        final data = (event.data as Map<String, dynamic>?) ?? const <String, dynamic>{};
         final white = pick(data['white']).asBoolOrNull();
         final black = pick(data['black']).asBoolOrNull();
         final curState = state.requireValue;
@@ -1049,104 +801,187 @@ class GameController(final GameFullId gameFullId)
         final data = event.data as Map<String, dynamic>;
         final fullId = pick(data['id']).asGameFullIdOrThrow();
         state = AsyncValue.data(state.requireValue.copyWith(redirectGameId: fullId));
-
-      case 'analysisProgress':
-        final data = ServerEvalEvent.fromJson(event.data as Map<String, dynamic>);
-        final curState = state.requireValue;
-        state = AsyncValue.data(
-          curState.copyWith.game(
-            white: curState.game.white.copyWith(analysis: data.analysis?.white),
-            black: curState.game.black.copyWith(analysis: data.analysis?.black),
-            evals: data.evals,
-          ),
-        );
-
-      case 'berserk':
-        ref.read(soundServiceProvider).play(Sound.berserk);
-
-        final side = pick(event.data).asSideOrNull();
-        final curState = state.requireValue;
-
-        state = AsyncValue.data(
-          curState.copyWith.game(
-            white: curState.game.white.copyWith(
-              berserk: side == Side.white || curState.game.white.berserk == true,
-            ),
-            black: curState.game.black.copyWith(
-              berserk: side == Side.black || curState.game.black.berserk == true,
-            ),
-          ),
-        );
     }
   }
 
+  void _onMoveEvent(MoveEvent data) {
+    final curState = state.requireValue;
+    final game = curState.game;
+    final size = game.meta.boardSize;
+    // The server counts plies from 1 in an even game (so that Black plays on odd plies) and from 0
+    // in a handicap game, and tells where it started.
+    final serverMoveCount = data.ply - (game.meta.startedAtTurn ?? 0);
+
+    final confirmsLocalMove =
+        serverMoveCount == game.moveCount && game.lastMove?.key(size) == data.move;
+
+    IList<GameStep> steps = game.steps;
+    var stepCursor = curState.stepCursor;
+    GoMove? moveToConfirm = curState.moveToConfirm;
+
+    if (confirmsLocalMove) {
+      _transientMoveTimer?.cancel();
+    } else {
+      final move = GoMove.fromKey(data.move, size);
+      if (move == null || serverMoveCount != game.moveCount + 1) {
+        // we missed something: ask the server for the whole game again
+        _reloadGame();
+        return;
+      }
+      GoPosition newPosition;
+      try {
+        newPosition = game.lastPosition.play(move);
+      } on GoMoveException {
+        _reloadGame();
+        return;
+      }
+      // the server board is authoritative
+      if (newPosition.boardString != data.board) {
+        newPosition = GoPosition(
+          size: newPosition.size,
+          board: GoPosition.fromBoardString(data.board, turn: data.nextSide).board,
+          turn: data.nextSide,
+          blackPrisoners: data.blackPrisoners,
+          whitePrisoners: data.whitePrisoners,
+          lastMove: move,
+          captured: data.captured,
+          passes: newPosition.passes,
+          seen: newPosition.seen,
+        );
+      }
+      steps = steps.add(GameStep(position: newPosition, move: move));
+      // the position changed: a move waiting for confirmation was chosen for the previous one
+      moveToConfirm = null;
+      if (!curState.isReplaying) {
+        stepCursor = steps.length - 1;
+        _moveFeedback(newPosition);
+      }
+    }
+
+    GameState newState = curState.copyWith(
+      game: game.copyWith(
+        steps: steps,
+        winner: data.winner ?? game.winner,
+        status: data.status ?? game.status,
+        koPoint: data.koPoint,
+        // leaving the scoring phase clears its marks; entering it is followed by a scoring event
+        scoring: data.scoring ? game.scoring : null,
+      ),
+      stepCursor: stepCursor,
+      moveToConfirm: moveToConfirm,
+      moveError: null,
+    );
+
+    if (data.clock != null) {
+      final lag = newState.game.playable && newState.game.isMyTurn
+          // my own clock doesn't need to be compensated for
+          ? Duration.zero
+          // server will send the lag only if it's more than 10ms
+          // default lag of 10ms is also used by web client
+          : data.clock?.lag ?? const Duration(milliseconds: 10);
+
+      if (newState.game.clock != null) {
+        // we don't rely on these values to display the clock, but let's keep
+        // the game object in sync
+        newState = newState.copyWith.game.clock!(white: data.clock!.white, black: data.clock!.black);
+      } else if (newState.game.correspondenceClock != null) {
+        newState = newState.copyWith.game.correspondenceClock!(
+          white: data.clock!.white,
+          black: data.clock!.black,
+          resetId: DateTime.now().millisecondsSinceEpoch,
+        );
+      }
+
+      _updateClock(
+        white: data.clock!.white,
+        black: data.clock!.black,
+        lag: lag,
+        activeSide: newState.activeClockSide,
+      );
+    }
+
+    if (newState.game.expiration != null) {
+      if (newState.game.moveCount >= 2) {
+        newState = newState.copyWith.game(expiration: null);
+      } else {
+        newState = newState.copyWith.game(
+          expiration: (
+            idle: newState.game.expiration!.idle,
+            timeToMove: curState.game.expiration!.timeToMove,
+            movedAt: DateTime.now(),
+          ),
+        );
+      }
+    }
+
+    state = AsyncValue.data(newState);
+  }
+
+  void _onEndEvent(GameEndEvent endData) {
+    // A move may have been applied optimistically to the board but never confirmed by the server
+    // because the game ended first — e.g. the player flagged. The transient move timer is still
+    // active in that case. Roll the unconfirmed move back so the final position matches the
+    // server.
+    GameState curState = state.requireValue;
+    if (_transientMoveTimer?.isActive == true && curState.game.steps.length > 1) {
+      final confirmedSteps = curState.game.steps.removeLast();
+      curState = curState.copyWith(
+        game: curState.game.copyWith(steps: confirmedSteps),
+        stepCursor: curState.stepCursor.clamp(0, confirmedSteps.length - 1),
+        moveToConfirm: null,
+      );
+    }
+    _transientMoveTimer?.cancel();
+
+    final score = endData.score;
+    final scoring = curState.game.scoring;
+    GameState newState = curState.copyWith(
+      moveToConfirm: null,
+      game: curState.game.copyWith(
+        status: endData.status,
+        winner: endData.winner,
+        boosted: endData.boosted,
+        scoring: score != null
+            ? (scoring != null ? scoring.copyWith(score: score) : GoScoring(score: score))
+            : scoring,
+        white: curState.game.white.copyWith(ratingDiff: endData.ratingDiff?.white),
+        black: curState.game.black.copyWith(ratingDiff: endData.ratingDiff?.black),
+      ),
+    );
+
+    if (endData.clock != null && newState.game.clock != null) {
+      newState = newState.copyWith.game.clock!(
+        white: endData.clock!.white,
+        black: endData.clock!.black,
+        running: false,
+      );
+      _updateClock(white: endData.clock!.white, black: endData.clock!.black, activeSide: null);
+    } else {
+      _clock?.stop();
+    }
+
+    if (curState.game.moveCount >= 2) {
+      Timer(const Duration(milliseconds: 500), () {
+        if (!ref.mounted) return;
+        ref.read(soundServiceProvider).play(Sound.dong);
+      });
+    }
+
+    state = AsyncValue.data(newState);
+
+    _storeGame(newState.game);
+  }
+
   Future<void> _storeGame(PlayableGame game) async {
-    if (game.finished) {
+    if (!game.finished) return;
+    try {
       final gameStorage = await ref.read(gameStorageProvider.future);
       final existing = await gameStorage.fetch(gameId: gameFullId.gameId);
       final finishedAt = existing?.data.lastMoveAt ?? DateTime.now();
       await gameStorage.save(game.toExportedGame(finishedAt: finishedAt));
-    }
-  }
-
-  Future<ExportedGame> _getPostGameData() {
-    return _gameRepository.getGame(gameFullId.gameId);
-  }
-
-  Future<void> _onFinishedGameLoad(PlayableGame game) async {
-    if (game.meta.speed == Speed.correspondence) {
-      ref.read(correspondenceServiceProvider).updateStoredGame(gameFullId, game);
-    }
-
-    PlayableGame gameWithPostData = game;
-    try {
-      final result = await _getPostGameData();
-      gameWithPostData = _mergePostGameData(game, result, rewriteSteps: true);
     } catch (e, st) {
-      _logger.warning('Could not get post game data', e, st);
+      _logger.warning('Could not store the finished game', e, st);
     }
-
-    await _storeGame(gameWithPostData);
-
-    if (!ref.mounted) return;
-
-    state = AsyncValue.data(state.requireValue.copyWith(game: gameWithPostData));
-  }
-
-  PlayableGame _mergePostGameData(
-    PlayableGame game,
-    ExportedGame data, {
-
-    /// Whether to rewrite the steps with the clock data from the archived game
-    ///
-    /// This should not be done when the game has just finished, because we
-    /// don't want to confuse the user with a changing clock.
-    bool rewriteSteps = false,
-  }) {
-    IList<GameStep> newSteps = game.steps;
-    if (rewriteSteps && game.meta.clock != null && data.clocks != null) {
-      final initialTime = game.meta.clock!.initial;
-      newSteps = game.steps.mapIndexed((index, element) {
-        if (index == 0) {
-          return element.copyWith(archivedWhiteClock: initialTime, archivedBlackClock: initialTime);
-        }
-        final prevClock = index > 1 ? data.clocks![index - 2] : initialTime;
-        final stepClock = data.clocks![index - 1];
-        return element.copyWith(
-          archivedWhiteClock: index.isOdd ? stepClock : prevClock,
-          archivedBlackClock: index.isEven ? stepClock : prevClock,
-        );
-      }).toIList();
-    }
-
-    return game.copyWith(
-      steps: newSteps,
-      clocks: data.clocks,
-      meta: game.meta.copyWith(opening: data.meta.opening, division: data.meta.division),
-      white: game.white.copyWith(analysis: data.white.analysis),
-      black: game.black.copyWith(analysis: data.black.analysis),
-      evals: data.evals,
-    );
   }
 }
 
@@ -1161,17 +996,16 @@ sealed class const GameState._() with _$GameState, ChatMixinState {
     required PlayableGame game,
     required int stepCursor,
     required LiveGameClock? liveClock,
-    int? lastDrawOfferAtPly,
     (Duration, DateTime)? opponentLeftCountdown,
 
     /// Game only setting to override the account preference
     bool? moveConfirmSettingOverride,
 
-    /// Game only setting to override the account preference
-    bool? autoQueenSettingOverride,
+    /// Set if confirm move preference is enabled and player chose a point
+    GoMove? moveToConfirm,
 
-    /// Set if confirm move preference is enabled and player played a move
-    Move? moveToConfirm,
+    /// Why the last point the player tapped cannot be played, until they tap elsewhere.
+    GoMoveError? moveError,
 
     /// Game full id used to redirect to the new game of the rematch
     GameFullId? redirectGameId,
@@ -1185,13 +1019,23 @@ sealed class const GameState._() with _$GameState, ChatMixinState {
     required bool chatDisabledViaPrefs,
   }) = _GameState;
 
-  /// The [Position] at the current cursor.
-  Position get currentPosition {
-    if (moveToConfirm != null) {
-      final lastPos = game.lastPosition;
-      return lastPos.playUnchecked(moveToConfirm!);
+  /// The [GoPosition] at the current cursor, with the stone waiting for confirmation if any.
+  GoPosition get currentPosition {
+    final pending = moveToConfirm;
+    if (pending != null && !isReplaying) {
+      try {
+        return game.lastPosition.play(pending);
+      } on GoMoveException {
+        return game.lastPosition;
+      }
     }
     return game.positionAt(stepCursor);
+  }
+
+  /// The point where a ko forbids playing in the position shown, if any.
+  int? get currentKoPoint {
+    if (moveToConfirm != null) return null;
+    return isReplaying ? game.positionAt(stepCursor).koPoint : game.koPoint;
   }
 
   /// Whether the zen mode is active.
@@ -1211,36 +1055,20 @@ sealed class const GameState._() with _$GameState, ChatMixinState {
     };
   }
 
-  /// Whether piece animations are enabled for this game. Animations are disabled for bullet and ultrabullet games.
-  bool get hasPieceAnimation => game.meta.speed != .bullet && game.meta.speed != .ultraBullet;
-
-  bool get canPremove => game.meta.speed != Speed.correspondence;
-  bool get canAutoQueen => autoQueenSettingOverride ?? (game.prefs?.autoQueen == AutoQueen.always);
-  bool get canAutoQueenOnPremove =>
-      autoQueenSettingOverride ??
-      (game.prefs?.autoQueen == AutoQueen.always || game.prefs?.autoQueen == AutoQueen.premove);
   bool get shouldConfirmMove => moveConfirmSettingOverride ?? game.prefs?.submitMove ?? false;
 
   bool get isReplaying => stepCursor < game.steps.length - 1;
   bool get canGoForward => stepCursor < game.steps.length - 1;
   bool get canGoBackward => stepCursor > 0;
 
-  bool get canBerserk =>
-      game.meta.tournament?.berserkable == true &&
-      game.playable &&
-      game.steps.length <= 2 &&
-      game.youAre != null;
-  bool get hasBerserked => game.youAre != null && game.playerOf(game.youAre!).berserk == true;
-
-  // Only if this game is part of a tournament
-  TournamentMeta? get tournament => game.meta.tournament;
+  /// Whether the player may pass now.
+  bool get canPass =>
+      game.youAre != null && game.playable && game.isMyTurn && !game.inScoringPhase;
 
   bool get canGetNewOpponent =>
       !game.playable &&
       game.meta.speed != Speed.correspondence &&
       (game.source == GameSource.lobby || game.source == GameSource.pool);
-
-  bool get canOfferDraw => game.drawable && (lastDrawOfferAtPly ?? -99) < game.lastPly - 20;
 
   bool get canShowClaimWinCountdown =>
       !game.isMyTurn &&
@@ -1263,22 +1091,20 @@ sealed class const GameState._() with _$GameState, ChatMixinState {
     return timeLeft;
   }
 
+  /// The side whose clock is running: none before both players made a move, during the scoring
+  /// phase, or once the game is over.
   Side? get activeClockSide {
     if (game.clock == null && game.correspondenceClock == null) {
       return null;
     }
-    if (game.status == GameStatus.started) {
-      final pos = game.lastPosition;
-      if (pos.fullmoves > 1) {
-        return pos.turn;
-      }
+    if (game.status == GameStatus.started && game.moveCount >= 2 && !game.inScoringPhase) {
+      return game.lastPosition.turn;
     }
 
     return null;
   }
 
-  GameChatOptions? get chatOptions =>
-      chatDisabledViaPrefs || isZenModeActive || game.meta.tournament != null
+  GameChatOptions? get chatOptions => chatDisabledViaPrefs || isZenModeActive
       ? null
       : GameChatOptions(
           id: gameFullId,

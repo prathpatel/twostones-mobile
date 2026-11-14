@@ -167,26 +167,10 @@ class GameScreenLoaderNotifier(final GameScreenSource source)
   }
 }
 
-final isBoardTurnedProvider = NotifierProvider.autoDispose<IsBoardTurnedNotifier, bool>(
-  IsBoardTurnedNotifier.new,
-  name: 'IsBoardTurnedProvider',
-);
-
-class IsBoardTurnedNotifier() extends Notifier<bool> {
-  @override
-  bool build() {
-    return false;
-  }
-
-  void toggle() {
-    state = !state;
-  }
-}
-
 /// User game preferences, defined server-side.
 final userGamePrefsProvider = FutureProvider.autoDispose
     .family<
-      ({ServerGamePrefs? prefs, bool shouldConfirmMove, bool isZenModeEnabled, bool canAutoQueen}),
+      ({ServerGamePrefs? prefs, bool shouldConfirmMove, bool isZenModeEnabled}),
       GameFullId
     >((Ref ref, GameFullId gameId) async {
       final state = await ref.watch(gameControllerProvider(gameId).future);
@@ -194,6 +178,5 @@ final userGamePrefsProvider = FutureProvider.autoDispose
         prefs: state.game.prefs,
         shouldConfirmMove: state.shouldConfirmMove,
         isZenModeEnabled: state.isZenModeEnabled,
-        canAutoQueen: state.canAutoQueen,
       );
     }, name: 'UserGamePrefsProvider');

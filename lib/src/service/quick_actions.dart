@@ -4,9 +4,6 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/localizations.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-import 'package:lichess_mobile/src/model/common/perf.dart';
-import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
@@ -58,15 +55,11 @@ class QuickActionService(final Ref ref) {
         final increment = seek.clock != null ? seek.clock!.$2.inSeconds.toString() : '0';
         final rated = seek.rated ? l10n.ratedTournament : l10n.casualTournament;
 
-        final variant = (seek.variant == Variant.standard)
-            ? ''
-            : (seek.variant != null && seek.timeIncrement != null)
-            ? ' • ${Perf.fromVariantAndSpeed(seek.variant!, Speed.fromTimeIncrement(seek.timeIncrement!)).shortLabel(l10n)}'
-            : '';
+        final board = '${seek.boardSize}×${seek.boardSize}';
 
         return ShortcutItem(
           type: 'recent_seek_$index',
-          localizedTitle: '$time+$increment $rated$variant',
+          localizedTitle: '$board $time+$increment $rated',
           localizedSubtitle: l10n.recentGames,
           icon: Platform.isIOS ? 'PlusIcon' : 'add_icon',
         );

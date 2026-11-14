@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:clock/clock.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/foundation.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 
 const _emergencyDelay = Duration(seconds: 20);
 const _tickDelay = Duration(milliseconds: 100);
@@ -10,7 +10,7 @@ const _tickDelay = Duration(milliseconds: 100);
 typedef _EmergencyState = ({bool shouldTriggerEmergencyCallback, DateTime? nextEmergency});
 
 /// A chess clock.
-class ChessClock({
+class GameClock({
   required Duration whiteTime,
   required Duration blackTime,
 

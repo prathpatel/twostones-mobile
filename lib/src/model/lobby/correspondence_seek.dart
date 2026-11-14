@@ -1,11 +1,11 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
+import 'package:lichess_mobile/src/model/go/pick.dart';
 
 part 'correspondence_seek.freezed.dart';
 
@@ -21,7 +21,7 @@ sealed class CorrespondenceSeek with _$CorrespondenceSeek {
     required String username,
     String? title,
     required int rating,
-    required Variant variant,
+    required int boardSize,
     required Perf perf,
     required bool rated,
     int? days,
@@ -39,7 +39,7 @@ CorrespondenceSeek _correspondenceSeekFromPick(RequiredPick pick) {
     username: pick('username').asStringOrThrow(),
     title: pick('title').asStringOrNull(),
     rating: pick('rating').asIntOrThrow(),
-    variant: pick('variant').asVariantOrThrow(),
+    boardSize: pick('size').asIntOrThrow(),
     perf: pick('perf').asPerfOrThrow(),
     rated: pick('mode').asIntOrThrow() == 1,
     days: pick('days').asIntOrNull(),

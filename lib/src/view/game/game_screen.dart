@@ -1,10 +1,10 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_controller.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
 import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
@@ -41,7 +41,8 @@ import 'package:material_ui/material_ui.dart';
 /// The screen will show a loading board while the game is being created.
 class const GameScreen({
   required final GameScreenSource source,
-  final LoadingParam? loadingPosition,
+  /// The position to show while the game loads, when the screen it is opened from knows it.
+  final GoPosition? loadingPosition,
 
   /// The date of the last move played in the game. If null, the game is in progress.
   final DateTime? lastMoveAt,
@@ -49,7 +50,7 @@ class const GameScreen({
 }) extends ConsumerStatefulWidget {
   static Route<dynamic> buildRoute({
     required GameScreenSource source,
-    LoadingParam? loadingPosition,
+    GoPosition? loadingPosition,
     DateTime? lastMoveAt,
   }) {
     return buildScreenRoute(
@@ -342,7 +343,7 @@ class _GameScreenState() extends ConsumerState<GameScreen> {
             () => ref.read(createGameServiceProvider).cancelChallenge(),
           ),
           ExistingGameSource() => StandaloneGameLoadingContent(
-            loadingParam: widget.loadingPosition,
+            loadingPosition: widget.loadingPosition,
             userActionsBar: const BottomBar.empty(cupertinoGlass: true),
           ),
         };
@@ -410,7 +411,10 @@ class const _GameTitle(
       children: [
         Icon(seek.perf.icon, color: DefaultTextStyle.of(context).style.color),
         const SizedBox(width: 4.0),
-        Text('${seek.timeIncrement?.display}$mode'),
+        Text(
+          '${seek.boardSize}×${seek.boardSize} • '
+          '${seek.timeIncrement?.display ?? context.l10n.nbDays(seek.days ?? 0)}$mode',
+        ),
       ],
     );
   }
@@ -422,10 +426,10 @@ class const _GameTitle(
       children: [
         Icon(challenge.perf.icon, color: DefaultTextStyle.of(context).style.color),
         const SizedBox(width: 4.0),
-        if (challenge.timeIncrement != null)
-          Text('${challenge.timeIncrement?.display}$mode')
-        else if (challenge.days != null)
-          Text('${context.l10n.nbDays(challenge.days!)}$mode'),
+        Text(
+          '${challenge.boardSize}×${challenge.boardSize} • '
+          '${challenge.timeIncrement?.display ?? (challenge.days != null ? context.l10n.nbDays(challenge.days!) : '∞')}$mode',
+        ),
       ],
     );
   }

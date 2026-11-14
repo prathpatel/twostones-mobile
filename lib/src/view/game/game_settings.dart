@@ -37,20 +37,11 @@ class const GameSettings({required final GameFullId id, super.key}) extends Cons
             ...userPrefsAsync.maybeWhen(
               data: (data) {
                 return [
-                  if (data.prefs?.submitMove == true)
-                    SwitchSettingTile(
+                  SwitchSettingTile(
                       title: Text(context.l10n.preferencesMoveConfirmation),
                       value: data.shouldConfirmMove,
                       onChanged: (value) {
                         ref.read(gameControllerProvider(id).notifier).toggleMoveConfirmation();
-                      },
-                    ),
-                  if (data.prefs?.autoQueen == AutoQueen.always)
-                    SwitchSettingTile(
-                      title: Text(context.l10n.preferencesPromoteToQueenAutomatically),
-                      value: data.canAutoQueen,
-                      onChanged: (value) {
-                        ref.read(gameControllerProvider(id).notifier).toggleAutoQueen();
                       },
                     ),
                   SwitchSettingTile(

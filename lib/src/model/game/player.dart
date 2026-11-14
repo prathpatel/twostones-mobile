@@ -24,15 +24,11 @@ sealed class const Player._() with _$Player {
     /// Is true if the player is disconnected from the game long enough that the
     /// opponent can claim a win
     bool? isGone,
-    bool? offeringDraw,
     bool? offeringRematch,
     bool? proposingTakeback,
 
-    /// Post game player analysis summary
-    PlayerAnalysis? analysis,
-
-    /// If in a tournament, whether the player has berserked or not. Null otherwise.
-    bool? berserk,
+    /// The name of the engine that plays this computer opponent, e.g. "KataGo".
+    String? aiEngine,
   }) = _Player;
 
   factory fromJson(Map<String, dynamic> json) => _$PlayerFromJson(json);
@@ -49,7 +45,7 @@ sealed class const Player._() with _$Player {
   String displayName(AppLocalizations l10n) =>
       user?.name ??
       name ??
-      (aiLevel != null ? l10n.aiNameLevelAiLevel('Stockfish', aiLevel.toString()) : l10n.anonymous);
+      (aiLevel != null ? l10n.aiNameLevelAiLevel(aiEngine ?? 'KataGo', aiLevel.toString()) : l10n.anonymous);
 
   Player setOnGame(bool onGame) {
     final isOnGame = onGame || isAI;
@@ -61,21 +57,3 @@ sealed class const Player._() with _$Player {
     return copyWith(isGone: goneButNoAI, onGame: goneButNoAI ? false : onGame);
   }
 }
-
-typedef PhaseAccuracies = ({int? opening, int? middlegame, int? endgame});
-
-@Freezed(fromJson: true, toJson: true)
-sealed class PlayerAnalysis with _$PlayerAnalysis {
-  const factory({
-    required int inaccuracies,
-    required int mistakes,
-    required int blunders,
-    int? acpl,
-    int? accuracy,
-    PhaseAccuracies? phases,
-  }) = _PlayerAnalysis;
-
-  factory fromJson(Map<String, dynamic> json) => _$PlayerAnalysisFromJson(json);
-}
-
-typedef PlayersAnalysis = ({PlayerAnalysis white, PlayerAnalysis black});

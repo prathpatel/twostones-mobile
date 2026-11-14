@@ -2,11 +2,8 @@ import 'package:intl/intl.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/styles/icon_extensions.dart';
-import 'package:lichess_mobile/src/styles/lichess_icons.dart';
-import 'package:lichess_mobile/src/utils/duration.dart';
 import 'package:lichess_mobile/src/utils/l10n.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
-import 'package:lichess_mobile/src/widgets/clock.dart';
 import 'package:lichess_mobile/src/widgets/misc.dart';
 import 'package:lichess_mobile/src/widgets/shimmer.dart';
 import 'package:material_ui/material_ui.dart';
@@ -14,63 +11,38 @@ import 'package:material_ui/material_ui.dart';
 /// App bar title for a standalone game (an existing/archived game), derived from
 /// its [GameMeta].
 ///
-/// Shows the game's speed/variant icon, the time control and rated/casual mode,
-/// and optionally the date of the last move. Used both by the game screen and
-/// the analysis screen so their app bar titles stay consistent.
+/// Shows the icon of the game's speed, the board size, the time control and rated/casual mode,
+/// and optionally the date of the last move.
 class const ExportedGameTitle({
   required final GameMeta meta,
 
   /// The date of the last move played in the game. When set, the title shows the
   /// relative date and a tooltip with the full date.
   final DateTime? lastMoveAt,
-
-  /// Whether the game was imported on lichess, and thus not played on the site.
-  final bool isImport = false,
-
-  /// The raw PGN date of an imported game, shown in place of [lastMoveAt], which is the date of
-  /// the import itself.
-  final String? importDate,
-
-  /// Whether the game was played in a tournament, for a game whose [meta] has no
-  /// [GameMeta.tournament] (an archived game).
-  final bool isTournament = false,
   super.key,
 }) extends StatelessWidget {
   static DateFormat get _tooltipFormatter => DateFormat.yMMMMd().add_jm();
 
   @override
   Widget build(BuildContext context) {
-    if (meta.tournament?.isOngoing == true) {
-      return _TournamentGameTitle(meta.tournament!);
-    }
-
-    final title = meta.clock != null
+    final time = meta.clock != null
         ? TimeIncrement(meta.clock!.initial.inSeconds, meta.clock!.increment.inSeconds).display
         : meta.daysPerTurn != null
         ? context.l10n.nbDays(meta.daysPerTurn!)
         : meta.perf.label(context.l10n);
 
+    final board = '${meta.boardSize}×${meta.boardSize}';
+    final handicap = meta.handicap > 0 ? ' H${meta.handicap}' : '';
     final mode = meta.rated ? ' • ${context.l10n.rated}' : ' • ${context.l10n.casual}';
 
-    // An imported game was not played on lichess: the time control and the rated status are
-    // meaningless, so only show that it is an import, and the date of the game if we have it.
-    final subtitle = isImport && importDate != null
-        ? formatPgnDate(importDate!, shortDate: false)
-        : lastMoveAt != null
+    final subtitle = lastMoveAt != null
         ? relativeDate(context.l10n, lastMoveAt!, shortDate: false)
         : null;
 
     final titleRow = Row(
       mainAxisSize: .min,
       children: [
-        Icon(
-          isImport
-              ? Icons.cloud_upload_outlined
-              : isTournament || meta.tournament != null
-              ? LichessIcons.tournament_cup
-              : meta.perf.icon,
-          color: DefaultTextStyle.of(context).style.color,
-        ),
+        Icon(meta.perf.icon, color: DefaultTextStyle.of(context).style.color),
         const SizedBox(width: 8.0),
         Flexible(
           child: Column(
@@ -78,7 +50,7 @@ class const ExportedGameTitle({
             crossAxisAlignment: .start,
             children: [
               AppBarTitleText(
-                isImport ? 'IMPORT' : '$title$mode',
+                '$board$handicap • $time$mode',
                 maxLines: 1,
                 minFontSize: 13.0,
                 maxFontSize: 16.0,
@@ -100,7 +72,7 @@ class const ExportedGameTitle({
       ],
     );
 
-    return lastMoveAt != null && importDate == null
+    return lastMoveAt != null
         ? Tooltip(message: _tooltipFormatter.format(lastMoveAt!), child: titleRow)
         : titleRow;
   }
@@ -125,31 +97,6 @@ class const ExportedGameTitleLoading({super.key}) extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class const _TournamentGameTitle(final TournamentMeta tournament) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: .min,
-      children: [
-        Flexible(child: AppBarTitleText(tournament.name)),
-        const SizedBox(width: 4.0),
-        CountdownClockBuilder(
-          timeLeft: tournament.clock.timeLeft,
-          clockUpdatedAt: tournament.clock.at,
-          active: true,
-          tickInterval: const Duration(seconds: 1),
-          builder: (BuildContext context, Duration timeLeft) => Center(
-            child: Text(
-              '${timeLeft.toHoursMinutesSeconds()} ',
-              style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

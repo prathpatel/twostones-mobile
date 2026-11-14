@@ -1,11 +1,11 @@
 import 'package:clock/clock.dart' as clock;
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:lichess_mobile/src/model/clock/chess_clock.dart';
 import 'package:lichess_mobile/src/model/clock/clock_tool_preferences.dart';
+import 'package:lichess_mobile/src/model/clock/game_clock.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/service/sound_service.dart';
 
 part 'clock_tool_controller.freezed.dart';
@@ -32,7 +32,7 @@ final clockToolControllerProvider = NotifierProvider.autoDispose<ClockToolContro
 );
 
 class ClockToolController() extends Notifier<ClockState> {
-  late ChessClock _clock;
+  late GameClock _clock;
   final Map<ClockSide, bool> _hasPlayedLowTimeSound = {
     ClockSide.top: false,
     ClockSide.bottom: false,
@@ -66,7 +66,7 @@ class ClockToolController() extends Notifier<ClockState> {
       bottomIncrement: bottomIncrement,
     );
 
-    _clock = ChessClock(blackTime: topTime, whiteTime: bottomTime, onFlag: _onFlagged);
+    _clock = GameClock(blackTime: topTime, whiteTime: bottomTime, onFlag: _onFlagged);
 
     // Add listeners for both clocks
     _clock.whiteTime.addListener(onClockEmergency);

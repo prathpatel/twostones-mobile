@@ -40,7 +40,6 @@ Future<void> bootstrapApp(
   final locale = setupIntl(widgetsBinding);
 
   // Background initialization tasks (non-blocking for first frame)
-  unawaited(preloadPieceImages());
   unawaited(initializeApp());
   unawaited(SoundService.initialize());
   unawaited(initializeLocalNotifications(locale));

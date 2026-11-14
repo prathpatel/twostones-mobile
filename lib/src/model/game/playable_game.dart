@@ -1,19 +1,17 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/model/chat/chat_message.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-import 'package:lichess_mobile/src/model/common/eval.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/game/exported_game.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
-import 'package:lichess_mobile/src/model/game/material_diff.dart';
 import 'package:lichess_mobile/src/model/game/player.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
+import 'package:lichess_mobile/src/model/go/pick.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/utils/json.dart';
 
@@ -30,23 +28,19 @@ part 'playable_game.freezed.dart';
 /// See also:
 /// - [ExportedGame] for a game that is finished and not owned by the current user.
 @freezed
-sealed class const PlayableGame._()
-    with BaseGame, _$PlayableGame, ServerGame, IndexableSteps
-    implements ServerGame {
+sealed class const PlayableGame._() with BaseGame, _$PlayableGame, ServerGame implements ServerGame {
   @Assert('steps.isNotEmpty')
   factory({
     required GameId id,
     required GameMeta meta,
     required GameSource source,
     required IList<GameStep> steps,
-    String? initialFen,
     required GameStatus status,
     Side? winner,
     required Player white,
     required Player black,
     required bool moretimeable,
     required bool takebackable,
-    IList<ExternalEval>? evals,
     IList<Duration>? clocks,
 
     /// The side that the current player is playing as. This is null if viewing
@@ -56,9 +50,13 @@ sealed class const PlayableGame._()
     ServerGamePrefs? prefs,
     PlayableClockData? clock,
     CorrespondenceClockData? correspondenceClock,
-    CorrespondenceForecast? correspondenceForecast,
     bool? boosted,
-    bool? isThreefoldRepetition,
+
+    /// The dead stones and the count, once both players passed.
+    GoScoring? scoring,
+
+    /// A point where playing is forbidden by a ko, as told by the server.
+    int? koPoint,
     ({Duration idle, Duration timeToMove, DateTime movedAt})? expiration,
     ChatData? chat,
 
@@ -66,12 +64,11 @@ sealed class const PlayableGame._()
     GameId? rematch,
   }) = _PlayableGame;
 
-  /// Create a playable game from the lichess api json.
+  /// Creates a playable game from the JSON the TwoStones server sends for a game page.
   ///
-  /// Currently, those endpoints are supported:
-  /// - GET /api/mobile/my-games
-  /// - player game socket (/play/:gameFullId/v6) 'full' event
-  /// - watcher game socket (/watch/:gameId/:side/v6) 'full' event
+  /// It is the data of the `full` event of the player game socket (`/play/:gameFullId/v6`) and of
+  /// the watcher game socket (`/watch/:gameId/:side/v6`): the game, the two players as `player`
+  /// and `opponent`, and the clock.
   factory fromServerJson(Map<String, dynamic> json) {
     return _playableGameFromPick(pick(json).required());
   }
@@ -88,29 +85,22 @@ sealed class const PlayableGame._()
 
   bool get hasAI => white.isAI || black.isAI;
 
-  bool get imported => source == GameSource.import;
-
   /// Whether it is the current player's turn.
   bool get isMyTurn => sideToMove == youAre;
 
   bool get abortable =>
-      playable &&
-      lastPosition.fullmoves <= 1 &&
-      (meta.rules == null || !meta.rules!.contains(GameRule.noAbort)) &&
-      meta.tournament == null;
+      playable && moveCount < 2 && (meta.rules == null || !meta.rules!.contains(GameRule.noAbort));
   bool get resignable => playable && !abortable;
-  bool get drawable =>
-      playable && lastPosition.fullmoves >= 2 && !(me?.offeringDraw == true) && !hasAI;
   bool get rematchable =>
       (meta.rules == null || !meta.rules!.contains(GameRule.noRematch)) &&
       (finished ||
           (aborted && (!meta.rated || !{GameSource.lobby, GameSource.pool}.contains(source)))) &&
-      meta.tournament == null &&
       boosted != true;
   bool get canTakeback =>
       takebackable &&
       playable &&
-      lastPosition.fullmoves >= 2 &&
+      !inScoringPhase &&
+      moveCount >= 2 &&
       !(me?.proposingTakeback == true) &&
       !(opponent?.proposingTakeback == true);
   bool get canGiveTime => moretimeable && playable && clock != null;
@@ -123,8 +113,8 @@ sealed class const PlayableGame._()
       resignable &&
       (meta.rules == null || !meta.rules!.contains(GameRule.noClaimWin));
 
-  bool get userAnalysable =>
-      finished && steps.length > 4 || (playable && (clock == null || youAre == null));
+  /// Whether the current player accepted the count of the scoring phase.
+  bool get hasAcceptedScore => youAre != null && scoring?.accepted.contains(youAre) == true;
 
   ExportedGame toExportedGame({required DateTime finishedAt}) {
     return ExportedGame(
@@ -133,10 +123,12 @@ sealed class const PlayableGame._()
       source: source,
       data: LightExportedGame(
         id: id,
-        variant: meta.variant,
+        boardSize: meta.boardSize,
+        komi: meta.komi,
+        handicap: meta.handicap,
         lastMoveAt: finishedAt,
-        lastFen: lastPosition.fen,
-        lastMove: lastMove,
+        board: lastPosition.boardString,
+        lastMove: lastMove?.key(meta.boardSize),
         createdAt: meta.createdAt,
         perf: meta.perf,
         speed: meta.speed,
@@ -145,21 +137,20 @@ sealed class const PlayableGame._()
         status: status,
         white: white,
         black: black,
+        result: resultString,
         clock: meta.clock != null
             ? (initial: meta.clock!.initial, increment: meta.clock!.increment)
             : null,
-        opening: meta.opening,
+        daysPerTurn: meta.daysPerTurn,
       ),
-      initialFen: initialFen,
       steps: steps,
       status: status,
       winner: winner,
-      isThreefoldRepetition: isThreefoldRepetition,
       white: white,
       black: black,
       youAre: youAre,
-      evals: evals,
       clocks: clocks,
+      scoring: scoring,
     );
   }
 }
@@ -184,53 +175,56 @@ sealed class const PlayableClockData._() with _$PlayableClockData {
 }
 
 PlayableGame _playableGameFromPick(RequiredPick pick) {
-  final requiredGamePick = pick('game').required();
+  final game = pick('game').required();
+  final go = game('go').required();
   final meta = _playableGameMetaFromPick(pick);
-  final initialFen = requiredGamePick('initialFen').asStringOrNull();
 
-  // assume lichess always send initialFen with fromPosition and chess960
-  Position position = (meta.variant == Variant.fromPosition || meta.variant == Variant.chess960)
-      ? Chess.fromSetup(Setup.parseFen(initialFen!))
-      : meta.variant.initialPosition;
-
-  final steps = [GameStep(position: position)];
-  final pgn = pick('game', 'pgn').asStringOrNull();
-  final moves = pgn != null && pgn != '' ? pgn.split(' ') : null;
-  if (moves != null && moves.isNotEmpty) {
-    for (final san in moves) {
-      final move = position.parseSan(san);
-      // assume lichess only sends correct moves
-      position = position.playUnchecked(move!);
-      steps.add(
-        GameStep(
-          sanMove: SanMove(san, move),
-          position: position,
-          diff: MaterialDiff.fromPosition(position),
-        ),
-      );
-    }
+  final moves = go('moves').asStringOrNull() ?? '';
+  var steps = makeGameSteps(
+    boardSize: meta.boardSize,
+    handicap: meta.handicap,
+    moves: moves.split(' ').where((move) => move.isNotEmpty),
+  );
+  // The server is authoritative: should the local replay disagree with its board, show its board.
+  final serverBoard = go('board').asStringOrNull();
+  if (serverBoard != null && serverBoard != steps.last.position.boardString) {
+    final turn = pick('game', 'player').asSideOrNull() ?? steps.last.position.turn;
+    steps = steps.add(
+      GameStep(
+        position: GoPosition.fromBoardString(serverBoard, turn: turn),
+        move: steps.last.move,
+      ),
+    );
   }
 
+  final playerPick = pick('player').required();
+  final opponentPick = pick('opponent').required();
+  final playerSide = playerPick('color').asSideOrThrow();
+  final isSpectator = playerPick('spectator').asBoolOrFalse();
+  final player = _playerFromPick(playerPick);
+  final opponent = _playerFromPick(opponentPick);
+
   return PlayableGame(
-    id: requiredGamePick('id').asGameIdOrThrow(),
+    id: game('id').asGameIdOrThrow(),
     meta: meta,
-    source: requiredGamePick('source')
-        .letOrThrow((pick) => GameSource.nameMap[pick.asStringOrThrow()] ?? GameSource.unknown),
-    initialFen: initialFen,
-    steps: steps.toIList(),
-    white: pick('white').letOrThrow(_playerFromUserGamePick),
-    black: pick('black').letOrThrow(_playerFromUserGamePick),
+    source: game('source').letOrNull(
+          (pick) => GameSource.nameMap[pick.asStringOrThrow()] ?? GameSource.unknown,
+        ) ??
+        GameSource.unknown,
+    steps: steps,
+    white: playerSide == Side.white ? player : opponent,
+    black: playerSide == Side.black ? player : opponent,
     clock: pick('clock').letOrNull(_playableClockDataFromPick),
     correspondenceClock: pick('correspondence').letOrNull(_correspondenceClockDataFromPick),
-    correspondenceForecast: pick('forecast').letOrNull(_correspondenceForecastFromPick),
-    status: pick('game', 'status').asGameStatusOrThrow(),
-    winner: pick('game', 'winner').asSideOrNull(),
-    boosted: pick('game', 'boosted').asBoolOrNull(),
-    isThreefoldRepetition: pick('game', 'threefold').asBoolOrNull(),
+    status: game('status').asGameStatusOrThrow(),
+    winner: game('winner').asSideOrNull(),
+    boosted: game('boosted').asBoolOrNull(),
+    scoring: go('scoring').letOrNull(GoScoring.fromPick),
+    koPoint: go('ko').asIntOrNull(),
     moretimeable: pick('moretimeable').asBoolOrFalse(),
     takebackable: pick('takebackable').asBoolOrFalse(),
-    youAre: pick('youAre').asSideOrNull(),
-    prefs: pick('prefs').letOrNull(_gamePrefsFromPick),
+    youAre: isSpectator ? null : playerSide,
+    prefs: pick('pref').letOrNull(_gamePrefsFromPick),
     bookmarked: pick('bookmarked').asBoolOrNull(),
     expiration: pick('expiration').letOrNull((it) {
       final idle = it('idleMillis').asDurationFromMilliSecondsOrThrow();
@@ -241,27 +235,33 @@ PlayableGame _playableGameFromPick(RequiredPick pick) {
       );
     }),
     chat: pick('chat').letOrNull((p) => chatDataFromPick(p)),
-    rematch: pick('game', 'rematch').asGameIdOrNull(),
+    rematch: game('rematch').asGameIdOrNull(),
   );
 }
 
 GameMeta _playableGameMetaFromPick(RequiredPick pick) {
+  final handicap = pick('game', 'go', 'handicap').asIntOrNull() ?? 0;
   return GameMeta(
-    createdAt: pick('game', 'createdAt').asDateTimeFromMillisecondsOrThrow(),
+    createdAt:
+        pick('game', 'createdAt').asDateTimeFromMillisecondsOrNull() ??
+        DateTime.fromMillisecondsSinceEpoch(0),
     rated: pick('game', 'rated').asBoolOrThrow(),
     speed: pick('game', 'speed').asSpeedOrThrow(),
-    perf: pick('game', 'perf').asPerfOrThrow(),
-    variant: pick('game', 'variant').asVariantOrThrow(),
+    perf: pick('game', 'perf').asPerfOrNull() ?? Perf.fromSpeed(pick('game', 'speed').asSpeedOrThrow()),
+    boardSize: pick('game', 'go', 'size').asIntOrThrow(),
+    komi: pick('game', 'go', 'komi').asDoubleOrNull() ?? defaultKomi(handicap: handicap),
+    handicap: handicap,
     clock: pick('clock').letOrNull((cPick) {
       final initial = cPick('initial').asDurationFromSecondsOrThrow();
       return (
         initial: initial,
         increment: cPick('increment').asDurationFromSecondsOrThrow(),
         emergency:
+            cPick('emerg').asDurationFromSecondsOrNull() ??
             const Duration(seconds: 1) *
-            (initial < const Duration(minutes: 1)
-                ? (initial.inSeconds * 0.2).clamp(2, 60)
-                : (initial.inSeconds * 0.125).clamp(10, 60)),
+                (initial < const Duration(minutes: 1)
+                    ? (initial.inSeconds * 0.2).clamp(2, 60)
+                    : (initial.inSeconds * 0.125).clamp(10, 60)),
         moreTime: cPick('moretime').asDurationFromSecondsOrNull(),
       );
     }),
@@ -271,41 +271,31 @@ GameMeta _playableGameMetaFromPick(RequiredPick pick) {
       (it) =>
           ISet(it.asListOrThrow((e) => GameRule.nameMap[e.asStringOrThrow()] ?? GameRule.unknown)),
     ),
-    division: pick('division').letOrNull(_divisionFromPick),
-    tournament: pick('tournament').letOrNull(_playableGameTournamentDataFromPick),
   );
 }
-
-TournamentMeta? _playableGameTournamentDataFromPick(RequiredPick pick) => TournamentMeta(
-  id: pick('id').asTournamentIdOrThrow(),
-  name: pick('name').asStringOrThrow(),
-  clock: (timeLeft: Duration(seconds: pick('secondsLeft').asIntOrThrow()), at: DateTime.now()),
-  berserkable: pick('berserkable').asBoolOrFalse(),
-  ranks: pick('ranks')
-      .letOrNull((p) => (white: p('white').asIntOrThrow(), black: p('black').asIntOrThrow())),
-);
 
 ServerGamePrefs _gamePrefsFromPick(RequiredPick pick) {
   return ServerGamePrefs(
-    showRatings: pick('showRatings').asBoolOrFalse(),
-    enablePremove: pick('enablePremove').asBoolOrFalse(),
-    autoQueen: AutoQueen.fromInt(pick('autoQueen').asIntOrThrow()),
+    // The server leaves the ratings out of the players when they are hidden.
+    showRatings: pick('showRatings').asBoolOrNull() ?? true,
     confirmResign: pick('confirmResign').asBoolOrFalse(),
     submitMove: pick('submitMove').asBoolOrFalse(),
-    zenMode: Zen.fromInt(pick('zen').asIntOrThrow()),
+    zenMode: Zen.fromInt(pick('zen').asIntOrNull() ?? 0),
   );
 }
 
-Player _playerFromUserGamePick(RequiredPick pick) {
+Player _playerFromPick(RequiredPick pick) {
   return Player(
     user: pick('user').asLightUserOrNull(),
+    name: pick('name').asStringOrNull(),
     rating: pick('rating').asIntOrNull(),
     provisional: pick('provisional').asBoolOrNull(),
     ratingDiff: pick('ratingDiff').asIntOrNull(),
-    aiLevel: pick('aiLevel').asIntOrNull(),
+    aiLevel: pick('ai').asIntOrNull() ?? pick('aiLevel').asIntOrNull(),
+    aiEngine: pick('aiEngine').asStringOrNull(),
     onGame: pick('onGame').asBoolOrNull(),
-    isGone: pick('isGone').asBoolOrNull(),
-    offeringDraw: pick('offeringDraw').asBoolOrNull(),
+    // `isGone` is false, true, or the number of seconds before the win can be claimed
+    isGone: pick('isGone').letOrNull((it) => it.value == true),
     offeringRematch: pick('offeringRematch').asBoolOrNull(),
     proposingTakeback: pick('proposingTakeback').asBoolOrNull(),
   );
@@ -327,19 +317,4 @@ CorrespondenceClockData _correspondenceClockDataFromPick(RequiredPick pick) {
     black: pick('black').asDurationFromSecondsOrThrow(),
     resetId: DateTime.now().millisecondsSinceEpoch,
   );
-}
-
-CorrespondenceForecast _correspondenceForecastFromPick(RequiredPick pick) => IList(
-  pick('steps').asListOrThrow(
-    (pick) => IList(
-      pick.asListOrThrow(
-        (pick) =>
-            SanMove(pick('san').asStringOrThrow(), Move.parse(pick('uci').asStringOrThrow())!),
-      ),
-    ),
-  ),
-);
-
-Division _divisionFromPick(RequiredPick pick) {
-  return Division(middlegame: pick('middle').asIntOrNull(), endgame: pick('end').asIntOrNull());
 }

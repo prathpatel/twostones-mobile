@@ -1,16 +1,14 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge_repository.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
-import 'package:lichess_mobile/src/model/game/game_board_params.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/lobby/game_seek.dart';
 import 'package:lichess_mobile/src/model/lobby/lobby_numbers.dart';
 import 'package:lichess_mobile/src/model/settings/brightness.dart';
@@ -21,7 +19,6 @@ import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/utils/share.dart';
 import 'package:lichess_mobile/src/utils/string.dart';
 import 'package:lichess_mobile/src/view/account/rating_pref_aware.dart';
-import 'package:lichess_mobile/src/view/game/game_body.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
 import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/view/user/pick_player_screen.dart';
@@ -49,8 +46,7 @@ class _LobbyScreenLoadingContentState() extends State<LobbyScreenLoadingContent>
   Widget build(BuildContext context) {
     return SafeArea(
       child: GameLayout(
-        orientation: Side.white,
-        boardParams: GameBoardParams.emptyBoard,
+        position: GoPosition.initial(widget.seek.boardSize),
         moves: const [],
         boardOverlay: _BoardOverlayCard(
           child: Column(
@@ -133,8 +129,10 @@ class _UserChallengeLoadingContentState() extends State<UserChallengeLoadingCont
   Widget build(BuildContext context) {
     return SafeArea(
       child: GameLayout(
-        orientation: Side.white,
-        boardParams: GameBoardParams.emptyBoard,
+        position: GoPosition.initial(
+          widget.challenge.boardSize,
+          handicap: widget.challenge.handicap,
+        ),
         moves: const [],
         boardOverlay: _BoardOverlayCard(
           padding: const EdgeInsets.all(40.0),
@@ -221,8 +219,10 @@ class _OpenChallengeLoadingContentState() extends ConsumerState<OpenChallengeLoa
         Expanded(
           child: SafeArea(
             child: GameLayout(
-              orientation: Side.white,
-              boardParams: GameBoardParams.emptyBoard,
+              position: GoPosition.initial(
+                widget.challengeRequest.boardSize,
+                handicap: widget.challengeRequest.handicap,
+              ),
               moves: const [],
               boardOverlay: _BoardOverlayCard(
                 padding: const EdgeInsets.all(24.0),
@@ -401,16 +401,30 @@ class _OpenChallengeLoadingContentState() extends ConsumerState<OpenChallengeLoa
 }
 
 class _GameParamsDisplay extends StatelessWidget {
-  const new({required this.perf, required this.timeIncrement, required this.days});
+  const new({
+    required this.perf,
+    required this.timeIncrement,
+    required this.days,
+    required this.boardSize,
+  }) : handicap = 0;
 
-  new seek(GameSeek seek) : perf = seek.perf, timeIncrement = seek.timeIncrement, days = seek.days;
+  new seek(GameSeek seek)
+    : perf = seek.perf,
+      timeIncrement = seek.timeIncrement,
+      days = seek.days,
+      boardSize = seek.boardSize,
+      handicap = 0;
 
   new challengeRequest(ChallengeRequest challenge)
     : perf = challenge.perf,
       timeIncrement = challenge.timeIncrement,
-      days = challenge.days;
+      days = challenge.days,
+      boardSize = challenge.boardSize,
+      handicap = challenge.handicap;
 
   final Perf perf;
+  final int boardSize;
+  final int handicap;
   final TimeIncrement? timeIncrement;
   final int? days;
 
@@ -423,8 +437,12 @@ class _GameParamsDisplay extends StatelessWidget {
         Icon(perf.icon, color: DefaultTextStyle.of(context).style.color),
         const SizedBox(width: 8.0),
         Text(
-          timeIncrement?.display ??
-              (days != null ? '${context.l10n.daysPerTurn}: $days' : context.l10n.unlimited),
+          [
+            '$boardSize×$boardSize',
+            if (handicap > 0) 'H$handicap',
+            timeIncrement?.display ??
+                (days != null ? '${context.l10n.daysPerTurn}: $days' : context.l10n.unlimited),
+          ].join(' • '),
           style: TextTheme.of(context).titleLarge,
         ),
       ],
@@ -432,49 +450,19 @@ class _GameParamsDisplay extends StatelessWidget {
   }
 }
 
+/// The screen of a game that is being loaded: the position it was opened from, if known, between
+/// two placeholders for the players.
 class const StandaloneGameLoadingContent({
-  final LoadingParam? loadingParam,
+  final GoPosition? loadingPosition,
   final Widget? userActionsBar,
   super.key,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final loadingFen = loadingParam?.fen;
-    final variant = loadingParam?.variant ?? Variant.standard;
-    Position? loadingPosition;
-    if (loadingFen != null) {
-      try {
-        loadingPosition = Position.setupPosition(
-          variant.rule,
-          Setup.parseFen(loadingFen),
-          ignoreImpossibleCheck: true,
-        );
-      } catch (_) {
-        loadingPosition = null;
-      }
-    }
-    final lastMove = loadingParam?.lastMove;
     return Shimmer(
       child: SafeArea(
         child: GameLayout(
-          orientation: loadingParam?.orientation ?? Side.white,
-          boardParams: loadingPosition == null
-              ? GameBoardParams.emptyBoard
-              : GameBoardParams.readonly(
-                  variant: variant,
-                  position: loadingPosition,
-                  lastMove: switch (lastMove) {
-                    // In crazyhouse games, the "ongoing games" endpoint does not return the correct UCI for crazyhouse games,
-                    // e.g. instead of P@c4 the UCI will be c4c4.
-                    // This leads to a "duplicate key" error, since chessground would try to highlight the same square twice.
-                    // The dropped role does not matter, since we just use it for the square highlight.
-                    NormalMove(:final from, :final to) when from == to => DropMove(
-                      to: to,
-                      role: Role.pawn,
-                    ),
-                    _ => lastMove,
-                  },
-                ),
+          position: loadingPosition ?? GoPosition.initial(19),
           topTable: const LoadingPlayerWidget(),
           bottomTable: const LoadingPlayerWidget(),
           moves: const [],
@@ -539,12 +527,7 @@ class const LoadGameError(final String errorMessage, {final bool showBottomBar =
       children: [
         Expanded(
           child: SafeArea(
-            child: GameLayout(
-              orientation: Side.white,
-              boardParams: GameBoardParams.emptyBoard,
-              moves: const [],
-              errorMessage: errorMessage,
-            ),
+            child: GameLayout.empty(errorMessage: errorMessage),
           ),
         ),
         BottomBar(
@@ -578,8 +561,7 @@ class const ChallengeDeclinedBoard({
         Expanded(
           child: SafeArea(
             child: GameLayout(
-              orientation: Side.white,
-              boardParams: GameBoardParams.emptyBoard,
+              position: GoPosition.initial(challenge.boardSize, handicap: challenge.handicap),
               moves: const [],
               boardOverlay: _BoardOverlayCard(
                 child: Column(

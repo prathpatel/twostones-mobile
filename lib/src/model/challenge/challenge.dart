@@ -1,12 +1,12 @@
 import 'package:deep_pick/deep_pick.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
+import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart' show kDefaultBoardSize;
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/utils/json.dart';
 
@@ -14,20 +14,22 @@ part 'challenge.freezed.dart';
 part 'challenge.g.dart';
 
 abstract mixin class BaseChallenge() {
-  Variant get variant;
+  /// Number of lines on each side of the board: 9, 13 or 19.
+  int get boardSize;
+
+  /// Number of stones Black starts with, 0 for an even game.
+  int get handicap;
   Speed get speed;
   ChallengeTimeControlType get timeControl;
   ({Duration time, Duration increment})? get clock;
   int? get days;
   bool get rated;
   SideChoice get sideChoice;
-  String? get initialFen;
 
   TimeIncrement? get timeIncrement =>
       clock != null ? TimeIncrement(clock!.time.inSeconds, clock!.increment.inSeconds) : null;
 
-  Perf get perf => Perf.fromVariantAndSpeed(
-    variant,
+  Perf get perf => Perf.fromSpeed(
     timeIncrement != null ? Speed.fromTimeIncrement(timeIncrement!) : Speed.correspondence,
   );
 }
@@ -40,7 +42,8 @@ sealed class const Challenge._() with _$Challenge, BaseChallenge implements Base
     required ChallengeId id,
     GameFullId? gameFullId,
     required ChallengeStatus status,
-    required Variant variant,
+    @Default(kDefaultBoardSize) int boardSize,
+    @Default(0) int handicap,
     required Speed speed,
     required ChallengeTimeControlType timeControl,
     required bool rated,
@@ -50,7 +53,6 @@ sealed class const Challenge._() with _$Challenge, BaseChallenge implements Base
     ChallengeUser? challenger,
     ChallengeUser? destUser,
     ChallengeDeclineReason? declineReason,
-    String? initialFen,
     ChallengeDirection? direction,
     GameId? rematchOf,
   }) = _Challenge;
@@ -65,10 +67,6 @@ sealed class const Challenge._() with _$Challenge, BaseChallenge implements Base
 
   /// The description of the challenge.
   String description(AppLocalizations l10n) {
-    if (!variant.isPlaySupported) {
-      return l10n.mobileUnsupportedVariant(variant.label(l10n));
-    }
-
     final time = switch (timeControl) {
       ChallengeTimeControlType.clock => () {
         final minutes = switch (clock!.time.inSeconds) {
@@ -84,12 +82,14 @@ sealed class const Challenge._() with _$Challenge, BaseChallenge implements Base
       ChallengeTimeControlType.unlimited => '∞',
     };
 
-    final variantStr = variant == Variant.standard ? '' : ' • ${variant.label(l10n)}';
+    final board = '$boardSize×$boardSize';
+    final handicapStr = handicap > 0 ? ' • H$handicap' : '';
 
-    final sidePiece = sideChoice == SideChoice.black
-        ? '♔ '
+    // the colour the player who receives the challenge would play
+    final sideStone = sideChoice == SideChoice.black
+        ? '○ '
         : sideChoice == SideChoice.white
-        ? '♚ '
+        ? '● '
         : '';
 
     final side = sideChoice == SideChoice.black
@@ -100,7 +100,7 @@ sealed class const Challenge._() with _$Challenge, BaseChallenge implements Base
 
     final mode = rated ? l10n.rated : l10n.casual;
 
-    return '$sidePiece$side • $mode • $time$variantStr';
+    return '$sideStone$side • $board$handicapStr • $mode • $time';
   }
 
   bool get isOpenOrRealTime => timeControl == ChallengeTimeControlType.clock || destUser == null;
@@ -114,13 +114,13 @@ sealed class const ChallengeRequest._()
   const factory({
     // If null, it's an open challenge that anyone (even anonymous users) can accept.
     LightUser? destUser,
-    required Variant variant,
+    @Default(kDefaultBoardSize) int boardSize,
+    @Default(0) int handicap,
     required ChallengeTimeControlType timeControl,
     ({Duration time, Duration increment})? clock,
     int? days,
     required bool rated,
     required SideChoice sideChoice,
-    String? initialFen,
   }) = _ChallengeRequest;
 
   @override
@@ -132,14 +132,22 @@ sealed class const ChallengeRequest._()
   );
 
   Map<String, dynamic> get toRequestBody {
+    // The fields of the challenge form of the server (`POST /setup/friend`).
     return {
-      'variant': variant.name,
-      if (clock != null) 'clock.limit': clock!.time.inSeconds.toString(),
-      if (clock != null) 'clock.increment': clock!.increment.inSeconds.toString(),
-      if (days != null) 'days': days.toString(),
-      if (rated) 'rated': 'true',
-      if (variant == Variant.fromPosition) 'fen': initialFen,
-      if (sideChoice != SideChoice.random) 'color': sideChoice.name,
+      'size': boardSize.toString(),
+      'handicap': handicap.toString(),
+      // 1 is a real time game, 2 a correspondence game, 0 a game without time limit
+      'timeMode': switch (timeControl) {
+        ChallengeTimeControlType.clock => '1',
+        ChallengeTimeControlType.correspondence => '2',
+        ChallengeTimeControlType.unlimited => '0',
+      },
+      'time': ((clock?.time.inSeconds ?? 300) / 60).toString(),
+      'increment': (clock?.increment.inSeconds ?? 0).toString(),
+      'days': (days ?? 2).toString(),
+      // handicap games cannot be rated
+      'mode': rated && handicap == 0 ? '1' : '0',
+      'color': sideChoice.name,
     };
   }
 
@@ -403,7 +411,8 @@ Challenge _challengeFromPick(RequiredPick pick) {
     id: pick('id').asChallengeIdOrThrow(),
     gameFullId: pick('fullId').asGameFullIdOrNull(),
     status: pick('status').asChallengeStatusOrThrow(),
-    variant: pick('variant').asVariantOrThrow(),
+    boardSize: pick('size').asIntOrNull() ?? kDefaultBoardSize,
+    handicap: pick('handicap').asIntOrNull() ?? 0,
     speed: pick('speed').asSpeedOrThrow(),
     timeControl: pick('timeControl', 'type').asChallengeTimeControlTypeOrThrow(),
     clock: pick('timeControl').letOrThrow((clockPick) {
@@ -432,7 +441,6 @@ Challenge _challengeFromPick(RequiredPick pick) {
         lagRating: destPick('lag').asIntOrNull(),
       );
     }),
-    initialFen: pick('initialFen').asStringOrNull(),
     direction: pick('direction').asChallengeDirectionOrNull(),
     declineReason: pick('declineReasonKey').asDeclineReasonOrNull(),
     rematchOf: pick('rematchOf').asGameIdOrNull(),

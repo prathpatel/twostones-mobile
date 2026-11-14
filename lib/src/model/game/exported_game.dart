@@ -1,18 +1,16 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/l10n/l10n.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-import 'package:lichess_mobile/src/model/common/eval.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
-import 'package:lichess_mobile/src/model/game/material_diff.dart';
 import 'package:lichess_mobile/src/model/game/player.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
+import 'package:lichess_mobile/src/model/go/pick.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/utils/json.dart';
 
@@ -21,26 +19,20 @@ part 'exported_game.g.dart';
 
 typedef ClockData = ({Duration initial, Duration increment});
 
-/// A lichess game fetched from the export API.
+/// A game fetched from the game API of the server, with all its moves.
 ///
 /// This usually represents a game that is finished and can be viewed by anyone, or accessed
 /// offline.
-/// It can also be an ongoing game that is not owned by the current user (e.g. a game of
-/// a friend you're watching).
 ///
 /// See [PlayableGame] for a game owned by the current user and that can be played unless finished.
 @Freezed(fromJson: true, toJson: true)
-sealed class const ExportedGame._()
-    with BaseGame, _$ExportedGame, ServerGame, IndexableSteps
-    implements ServerGame {
+sealed class const ExportedGame._() with BaseGame, _$ExportedGame, ServerGame implements ServerGame {
   @Assert('steps.isNotEmpty')
   factory({
     required GameId id,
     required GameMeta meta,
-    // TODO refactor to not include this field
     required LightExportedGame data,
     @JsonKey(fromJson: stepsFromJson, toJson: stepsToJson) required IList<GameStep> steps,
-    String? initialFen,
     required GameStatus status,
     @JsonKey(defaultValue: GameSource.unknown, unknownEnumValue: GameSource.unknown)
     required GameSource source,
@@ -48,19 +40,20 @@ sealed class const ExportedGame._()
 
     /// The point of view of the current player or null if spectating.
     Side? youAre,
-    bool? isThreefoldRepetition,
     required Player white,
     required Player black,
-    IList<ExternalEval>? evals,
     IList<Duration>? clocks,
+
+    /// The dead stones and the count, for a game that was finished by counting.
+    GoScoring? scoring,
   }) = _ExportedGame;
 
-  /// Create an exported game from the lichess api.
+  /// Creates an exported game from the server's JSON.
   ///
   /// Currently, those endpoints are supported:
-  /// - GET /game/export/:id
+  /// - GET /api/mobile/game/:id
   factory fromServerJson(Map<String, dynamic> json, {bool withBookmarked = false}) {
-    return _archivedGameFromPick(pick(json).required(), withBookmarked: withBookmarked);
+    return _exportedGameFromPick(pick(json).required(), withBookmarked: withBookmarked);
   }
 
   /// Create an exported game from a local storage JSON.
@@ -70,12 +63,14 @@ sealed class const ExportedGame._()
 /// A [LightExportedGame] associated with a point of view of a player.
 typedef LightExportedGameWithPov = ({LightExportedGame game, Side pov});
 
-/// A lichess game exported from the API, with less data than [ExportedGame].
+/// A game exported from the API, with less data than [ExportedGame]: its last position, not its
+/// moves.
 ///
 /// This is commonly used to display a list of games.
-/// Lichess endpoints that return this data:
-/// - GET /api/games/user/:userId
-/// - GET /api/games/export/_ids
+/// Server endpoints that return this data:
+/// - GET /api/mobile/games/user/:userId
+/// - GET /api/mobile/games/bookmarks
+/// - POST /api/mobile/games/ids
 @Freezed(fromJson: true, toJson: true)
 sealed class const LightExportedGame._() with _$LightExportedGame {
   const factory({
@@ -92,23 +87,25 @@ sealed class const LightExportedGame._() with _$LightExportedGame {
     required GameStatus status,
     required Player white,
     required Player black,
-    required Variant variant,
+
+    /// Number of lines on each side of the board: 9, 13 or 19.
+    required int boardSize,
+    required double komi,
+    @Default(0) int handicap,
     GameSource? source,
 
-    /// The date of an imported game, as found in the PGN tags at import time.
-    ///
-    /// This is a raw PGN date string, which may be partially unknown (e.g. '1972.08.??').
-    String? importDate,
-    LightOpening? opening,
-    String? lastFen,
-    String? moves,
-    @MoveConverter() Move? lastMove,
+    /// The stones of the last position, as the server writes a board: one character per point.
+    String? board,
+
+    /// The last move, in SGF coordinates or `pass`.
+    String? lastMove,
+
+    /// The result as written in a game record, e.g. `B+3.5` or `W+R`.
+    String? result,
     Side? winner,
     ClockData? clock,
     int? daysPerTurn,
     bool? bookmarked,
-    TournamentId? arenaTournamentId,
-    String? arenaTournamentName,
   }) = _ExportedGameData;
 
   factory fromServerJson(
@@ -139,8 +136,21 @@ sealed class const LightExportedGame._() with _$LightExportedGame {
 
   bool get isBookmarked => bookmarked == true;
 
-  /// Whether the game was imported on lichess, and thus not played on the site.
-  bool get isImported => source?.isImport == true;
+  /// The last position of the game, or an empty board when the server did not send it.
+  GoPosition get lastPosition {
+    final board = this.board;
+    final key = lastMove;
+    final move = key != null ? GoMove.fromKey(key, boardSize) : null;
+    final position = board != null && board.length == boardSize * boardSize
+        ? GoPosition.fromBoardString(board, turn: Side.black)
+        : GoPosition.initial(boardSize, handicap: handicap);
+    return GoPosition(
+      size: position.size,
+      board: position.board,
+      turn: position.turn,
+      lastMove: move,
+    );
+  }
 
   String clockDisplay(AppLocalizations l10n) {
     return daysPerTurn != null
@@ -149,35 +159,20 @@ sealed class const LightExportedGame._() with _$LightExportedGame {
   }
 }
 
-IList<ExternalEval>? gameEvalsFromPick(RequiredPick pick) {
-  return pick('analysis')
-      .asListOrNull<ExternalEval>(
-        (p0) => ExternalEval(
-          cp: p0('eval').asIntOrNull(),
-          mate: p0('mate').asIntOrNull(),
-          bestMove: p0('best').asStringOrNull(),
-          variation: p0('variation').asStringOrNull(),
-          judgment: p0('judgment').letOrNull(
-            (j) => (name: j('name').asStringOrThrow(), comment: j('comment').asStringOrThrow()),
-          ),
-        ),
-      )
-      ?.lock;
-}
-
-ExportedGame _archivedGameFromPick(RequiredPick pick, {bool withBookmarked = false}) {
+ExportedGame _exportedGameFromPick(RequiredPick pick, {bool withBookmarked = false}) {
   final data = _lightExportedGameFromPick(pick, withBookmarked: withBookmarked);
   final clocks = pick('clocks')
-      .asListOrNull<Duration>((p0) => Duration(milliseconds: p0.asIntOrThrow() * 10));
-  final division = pick('division').letOrNull(_divisionFromPick);
-
-  final initialFen = pick('initialFen').asStringOrNull();
+      .asListOrNull<Duration>((p0) => Duration(milliseconds: p0.asIntOrThrow() * 10))
+      ?.lock;
+  final moves = pick('moves').asStringOrNull() ?? '';
 
   return ExportedGame(
     id: data.id,
     meta: GameMeta(
       createdAt: data.createdAt,
-      variant: data.variant,
+      boardSize: data.boardSize,
+      komi: data.komi,
+      handicap: data.handicap,
       speed: data.speed,
       perf: data.perf,
       rated: data.rated,
@@ -189,50 +184,23 @@ ExportedGame _archivedGameFromPick(RequiredPick pick, {bool withBookmarked = fal
               moreTime: null,
             )
           : null,
-      opening: data.opening,
-      division: division,
+      daysPerTurn: data.daysPerTurn,
     ),
-    source: pick('source')
-        .letOrThrow((pick) => GameSource.nameMap[pick.asStringOrThrow()] ?? GameSource.unknown),
+    source: data.source ?? GameSource.unknown,
     data: data,
     status: data.status,
     winner: data.winner,
-    initialFen: initialFen,
-    isThreefoldRepetition: pick('threefold').asBoolOrNull(),
     white: data.white,
     black: data.black,
-    steps: pick('moves').letOrThrow((it) {
-      final moves = it.asStringOrThrow();
-      final movesList = moves.isEmpty ? <String>[] : moves.split(' ');
-
-      // assume lichess always send initialFen with fromPosition and chess960
-      Position position = (data.variant == Variant.fromPosition || data.variant == Variant.chess960)
-          ? Chess.fromSetup(Setup.parseFen(initialFen!))
-          : data.variant.initialPosition;
-      int index = 0;
-      final List<GameStep> steps = [GameStep(position: position)];
-      Duration? clock = data.clock?.initial;
-      for (final san in movesList) {
-        final stepClock = clocks?[index];
-        index++;
-        final move = position.parseSan(san);
-        // assume lichess only sends correct moves
-        position = position.playUnchecked(move!);
-        steps.add(
-          GameStep(
-            sanMove: SanMove(san, move),
-            position: position,
-            diff: MaterialDiff.fromPosition(position),
-            archivedWhiteClock: index.isOdd ? stepClock : clock,
-            archivedBlackClock: index.isEven ? stepClock : clock,
-          ),
-        );
-        clock = stepClock;
-      }
-      return IList(steps);
-    }),
-    clocks: IList(clocks ?? []),
-    evals: gameEvalsFromPick(pick),
+    steps: makeGameSteps(
+      boardSize: data.boardSize,
+      handicap: data.handicap,
+      moves: moves.split(' ').where((move) => move.isNotEmpty),
+      clocks: clocks,
+      initialClock: data.clock?.initial,
+    ),
+    clocks: clocks,
+    scoring: pick('scoring').letOrNull(GoScoring.fromPick),
   );
 }
 
@@ -241,40 +209,36 @@ LightExportedGame _lightExportedGameFromPick(
   bool withBookmarked = false,
   bool isBookmarked = false,
 }) {
+  final handicap = pick('handicap').asIntOrNull() ?? 0;
+  final speed = pick('speed').asSpeedOrThrow();
   return LightExportedGame(
     id: pick('id').asGameIdOrThrow(),
     fullId: pick('fullId').asGameFullIdOrNull(),
     source: pick('source')
         .letOrNull((pick) => GameSource.nameMap[pick.asStringOrThrow()] ?? GameSource.unknown),
-    importDate: pick('import', 'date').asStringOrNull(),
     rated: pick('rated').asBoolOrThrow(),
-    speed: pick('speed').asSpeedOrThrow(),
-    perf: pick('perf').asPerfOrThrow(),
+    speed: speed,
+    perf: pick('perf').asPerfOrNull() ?? Perf.fromSpeed(speed),
     createdAt: pick('createdAt').asDateTimeFromMillisecondsOrThrow(),
     lastMoveAt: pick('lastMoveAt').asDateTimeFromMillisecondsOrThrow(),
     status: pick('status').asGameStatusOrThrow(),
-    white: pick('players', 'white').letOrThrow(_playerFromUserGamePick),
-    black: pick('players', 'black').letOrThrow(_playerFromUserGamePick),
+    white: pick('players', 'white').letOrThrow(_playerFromPick),
+    black: pick('players', 'black').letOrThrow(_playerFromPick),
     winner: pick('winner').asSideOrNull(),
-    variant: pick('variant').asVariantOrThrow(),
-    lastFen: pick('lastFen').asStringOrNull(),
-    moves: pick('moves').asStringOrNull(),
-    lastMove: pick('lastMove').asUciMoveOrNull(),
+    boardSize: pick('size').asIntOrThrow(),
+    komi: pick('komi').asDoubleOrNull() ?? defaultKomi(handicap: handicap),
+    handicap: handicap,
+    board: pick('board').asStringOrNull(),
+    lastMove: pick('lastMove').asStringOrNull(),
+    result: pick('result').asStringOrNull(),
     clock: pick('clock').letOrNull(_clockDataFromPick),
     daysPerTurn: pick('daysPerTurn').asIntOrNull(),
-    opening: pick('opening').letOrNull(_openingFromPick),
     bookmarked: isBookmarked
         ? true
         : withBookmarked
         ? pick('bookmarked').asBoolOrFalse()
         : null,
-    arenaTournamentId: pick('arenaTour', 'id').asTournamentIdOrNull(),
-    arenaTournamentName: pick('arenaTour', 'name').asStringOrNull(),
   );
-}
-
-LightOpening _openingFromPick(RequiredPick pick) {
-  return LightOpening(eco: pick('eco').asStringOrThrow(), name: pick('name').asStringOrThrow());
 }
 
 ClockData _clockDataFromPick(RequiredPick pick) {
@@ -284,52 +248,14 @@ ClockData _clockDataFromPick(RequiredPick pick) {
   );
 }
 
-Player _playerFromUserGamePick(RequiredPick pick) {
-  final originalName = pick('name').asStringOrNull();
+Player _playerFromPick(RequiredPick pick) {
   return Player(
     user: pick('user').asLightUserOrNull(),
-    name: _removeRatingFromName(originalName),
-    rating: pick('rating').asIntOrNull() ?? _extractRatingFromName(originalName),
+    name: pick('name').asStringOrNull(),
+    rating: pick('rating').asIntOrNull(),
     provisional: pick('provisional').asBoolOrNull(),
     ratingDiff: pick('ratingDiff').asIntOrNull(),
     aiLevel: pick('aiLevel').asIntOrNull(),
-    analysis: pick('analysis').letOrNull(_playerAnalysisFromPick),
+    aiEngine: pick('aiEngine').asStringOrNull(),
   );
-}
-
-int? _extractRatingFromName(String? name) {
-  if (name == null) return null;
-  final regex = RegExp(r'\((\d+)\)');
-  final match = regex.firstMatch(name);
-  if (match != null) {
-    return int.tryParse(match.group(1)!);
-  }
-  return null;
-}
-
-String? _removeRatingFromName(String? name) {
-  if (name == null) return null;
-  final regex = RegExp(r'\s*\(\d+\)\s*');
-  return name.replaceAll(regex, '');
-}
-
-PlayerAnalysis _playerAnalysisFromPick(RequiredPick pick) {
-  return PlayerAnalysis(
-    inaccuracies: pick('inaccuracy').asIntOrThrow(),
-    mistakes: pick('mistake').asIntOrThrow(),
-    blunders: pick('blunder').asIntOrThrow(),
-    acpl: pick('acpl').asIntOrNull(),
-    accuracy: pick('accuracy').asIntOrNull(),
-    phases: pick('phases').letOrNull(
-      (p) => (
-        opening: p('opening').asIntOrNull(),
-        middlegame: p('middlegame').asIntOrNull(),
-        endgame: p('endgame').asIntOrNull(),
-      ),
-    ),
-  );
-}
-
-Division _divisionFromPick(RequiredPick pick) {
-  return Division(middlegame: pick('middle').asIntOrNull(), endgame: pick('end').asIntOrNull());
 }

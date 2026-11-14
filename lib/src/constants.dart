@@ -47,6 +47,9 @@ const kLichessBlueskyUrl = 'https://bsky.app/profile/lichess.org';
 const kLichessDiscordUrl = 'https://discord.gg/lichess';
 
 // UI
+
+/// The colour of a wooden Go board, which the colours of the app are derived from.
+const kBoardWoodColor = Color(0xFFB98B4E);
 const double kCupertinoBarOpacity = 0.8;
 
 const kGoldenRatio = 1.61803398875;

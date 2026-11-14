@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
+import 'package:lichess_mobile/src/model/lobby/game_setup_preferences.dart' show kDefaultBoardSize;
 import 'package:lichess_mobile/src/model/settings/preferences_storage.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 
@@ -34,8 +34,12 @@ class ChallengePreferences()
     return fetch();
   }
 
-  Future<void> setVariant(Variant variant) {
-    return save(state.copyWith(variant: variant));
+  Future<void> setBoardSize(int boardSize) {
+    return save(state.copyWith(boardSize: boardSize));
+  }
+
+  Future<void> setHandicap(int handicap) {
+    return save(state.copyWith(handicap: handicap));
   }
 
   Future<void> setTimeControl(ChallengeTimeControlType timeControl) {
@@ -62,7 +66,8 @@ class ChallengePreferences()
 @Freezed(fromJson: true, toJson: true)
 sealed class const ChallengePrefs._() with _$ChallengePrefs implements Serializable {
   const factory({
-    required Variant variant,
+    @Default(kDefaultBoardSize) int boardSize,
+    @Default(0) int handicap,
     required ChallengeTimeControlType timeControl,
     required ({Duration time, Duration increment}) clock,
     required int days,
@@ -71,7 +76,6 @@ sealed class const ChallengePrefs._() with _$ChallengePrefs implements Serializa
   }) = _ChallengePrefs;
 
   static const defaults = ChallengePrefs(
-    variant: Variant.standard,
     timeControl: ChallengeTimeControlType.clock,
     clock: (time: Duration(minutes: 10), increment: Duration.zero),
     days: 3,
@@ -83,23 +87,20 @@ sealed class const ChallengePrefs._() with _$ChallengePrefs implements Serializa
       ? Speed.fromTimeIncrement(TimeIncrement(clock.time.inSeconds, clock.increment.inSeconds))
       : Speed.correspondence;
 
-  // for correspondence game only standard can be rated
-  // for real time fromPosition cannot be rated
-  bool get isRatedAllowed => timeControl == ChallengeTimeControlType.clock
-      ? variant != Variant.fromPosition
-      : timeControl == ChallengeTimeControlType.correspondence && variant == Variant.standard;
+  /// Handicap games and games without a time limit cannot be rated.
+  bool get isRatedAllowed => handicap == 0 && timeControl != ChallengeTimeControlType.unlimited;
 
-  ChallengeRequest makeRequest(User? challengingUser, LightUser? destUser, [String? initialFen]) {
+  ChallengeRequest makeRequest(User? challengingUser, LightUser? destUser) {
     return ChallengeRequest(
       destUser: destUser,
-      variant: variant,
+      boardSize: boardSize,
+      handicap: handicap,
       timeControl: timeControl,
       clock: timeControl == ChallengeTimeControlType.clock ? clock : null,
       days: timeControl == ChallengeTimeControlType.correspondence ? days : null,
       // Anonymous users cannot create rated challenges.
       rated: challengingUser != null && isRatedAllowed && rated,
       sideChoice: sideChoice,
-      initialFen: initialFen,
     );
   }
 

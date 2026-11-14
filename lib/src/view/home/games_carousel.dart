@@ -1,13 +1,13 @@
-import 'package:chessground/chessground.dart';
-import 'package:dartchess/dartchess.dart';
+import 'package:lichess_mobile/src/constants.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/ongoing_game.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/tab_navigation.dart';
 import 'package:lichess_mobile/src/utils/l10n.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
+import 'package:lichess_mobile/src/widgets/go_board.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/user.dart';
 import 'package:material_ui/material_ui.dart';
@@ -114,9 +114,7 @@ class const OngoingGameCarouselItem({required final OngoingGame game}) extends S
       opacity: game.isRealTime || game.isMyTurn ? _kDefaultCardOpacity : 0.7,
       child: _BoardCarouselItem(
         isRealTimeGame: game.isRealTime,
-        fen: game.fen,
-        orientation: game.orientation,
-        lastMove: game.lastMove,
+        position: game.position,
         description: Align(
           alignment: Alignment.centerLeft,
           child: Padding(
@@ -154,32 +152,25 @@ class const OngoingGameCarouselItem({required final OngoingGame game}) extends S
 }
 
 class const _BoardCarouselItem({
-  /// Side by which the board is oriented.
-  required final Side orientation,
-
-  /// FEN string describing the position of the board.
-  required final String fen,
+  /// The stones to show.
+  required final GoPosition position,
   required final Widget description,
-
-  /// Last move played, used to highlight corresponding squares.
-  final Move? lastMove,
 
   /// Whether the game is a real-time game, so it will be highlighted differently.
   final bool isRealTimeGame = false,
-}) extends ConsumerWidget {
+}) extends StatelessWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final boardPrefs = ref.watch(boardPreferencesProvider);
+  Widget build(BuildContext context) {
     final brightness = ColorScheme.of(context).brightness;
 
     final backgroundColor = lighten(
-      isRealTimeGame ? context.lichessColors.brag : boardPrefs.boardTheme.colors.darkSquare,
+      isRealTimeGame ? context.lichessColors.brag : kBoardWoodColor,
       brightness == Brightness.light ? 0.25 : 0.0,
     );
 
     // apply hue settings to background color
     final hsl = HSLColor.fromColor(backgroundColor);
-    final hue = (hsl.hue + boardPrefs.hue) % 360;
+    final hue = hsl.hue;
 
     final backgroundColorWithHueFilter = HSLColor.fromAHSL(
       1.0,
@@ -203,25 +194,12 @@ class const _BoardCarouselItem({
           children: [
             SizedBox(
               height: boardSize,
-              child: StaticChessboard(
-                size: boardSize,
-                fen: fen,
-                orientation: orientation,
-                lastMove: lastMove,
-                settings: StaticChessboardSettings(
-                  hue: boardPrefs.hue,
-                  contrast: boardPrefs.contrast,
-                  brightness: boardPrefs.effectiveBrightness(Theme.of(context).brightness),
-                  enableCoordinates: false,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(10.0),
-                    topRight: Radius.circular(10.0),
-                  ),
-                  pieceAssets: boardPrefs.pieceSet.assets,
-                  colorScheme: isRealTimeGame
-                      ? realTimeColors(context)
-                      : boardPrefs.boardTheme.colors,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(10.0),
+                  topRight: Radius.circular(10.0),
                 ),
+                child: GoBoard(size: boardSize, position: position, showCoordinates: false),
               ),
             ),
             Positioned(
@@ -235,32 +213,6 @@ class const _BoardCarouselItem({
           ],
         ),
       ),
-    );
-  }
-
-  ChessboardColorScheme realTimeColors(BuildContext context) {
-    final brag = context.lichessColors.brag;
-    final lightSquare = lighten(brag, 0.55);
-    final darkSquare = brag;
-    return ChessboardColorScheme(
-      lightSquare: lightSquare,
-      darkSquare: darkSquare,
-      background: SolidColorChessboardBackground(lightSquare: lightSquare, darkSquare: darkSquare),
-      whiteCoordBackground: SolidColorChessboardBackground(
-        lightSquare: lightSquare,
-        darkSquare: darkSquare,
-        coordinates: true,
-      ),
-      blackCoordBackground: SolidColorChessboardBackground(
-        lightSquare: lightSquare,
-        darkSquare: darkSquare,
-        coordinates: true,
-        orientation: Side.black,
-      ),
-      lastMove: const HighlightDetails(solidColor: Color(0x809cc700)),
-      selected: const HighlightDetails(solidColor: Color(0x6014551e)),
-      validMoves: const Color(0x4014551e),
-      validPremoves: const Color(0x40203085),
     );
   }
 }

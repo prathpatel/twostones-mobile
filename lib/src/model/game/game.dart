@@ -1,28 +1,23 @@
 import 'dart:convert';
 
-import 'package:collection/collection.dart';
-import 'package:dartchess/dartchess.dart';
+import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:intl/intl.dart';
 import 'package:lichess_mobile/l10n/l10n.dart' show AppLocalizations;
 import 'package:lichess_mobile/src/model/account/account_preferences.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
-import 'package:lichess_mobile/src/model/common/eval.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
-import 'package:lichess_mobile/src/model/common/node.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
-import 'package:lichess_mobile/src/model/game/material_diff.dart';
 import 'package:lichess_mobile/src/model/game/player.dart';
-import 'package:lichess_mobile/src/network/http.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 
 part 'game.freezed.dart';
 part 'game.g.dart';
 
-final _dateFormat = DateFormat('yyyy.MM.dd');
+final _sgfDateFormat = DateFormat('yyyy-MM-dd');
 
 /// Clamps negative durations to zero, so that lag compensation cannot produce a negative move
 /// time.
@@ -32,11 +27,10 @@ Duration _atLeastZero(Duration duration) => duration < Duration.zero ? Duration.
 ///
 /// The time spent on a move is the clock the player had left after their previous move, plus the
 /// increment, minus the clock they have left after this one. Each side's first move is reported as
-/// [Duration.zero], since the clock is not running before it. This matches lila's own derivation
-/// in `GameExt.computeMoveTimes`.
+/// [Duration.zero], since the clock is not running before it.
 ///
-/// Returns an empty list when there are no clocks to derive them from (correspondence, unclocked
-/// games and most PGN imports).
+/// Returns an empty list when there are no clocks to derive them from (correspondence and
+/// unclocked games).
 IList<Duration> moveTimesFromClocks(IList<Duration>? clocks, Duration increment) {
   if (clocks == null || clocks.isEmpty) {
     return const IListConst<Duration>([]);
@@ -53,15 +47,15 @@ abstract mixin class BaseGame() {
 
   GameMeta get meta;
 
-  /// Game steps, cannot be empty.
+  /// Game steps, cannot be empty: the first one is the position before the first move.
   IList<GameStep> get steps;
 
-  IList<ExternalEval>? get evals;
   IList<Duration>? get clocks;
 
-  String? get initialFen;
-
   GameStatus get status;
+
+  /// The count of the game, once both players passed or once it is finished by counting.
+  GoScoring? get scoring;
 
   /// The time control of the game, [TimeIncrement.infinite] if it is played without a clock.
   TimeIncrement get timeIncrement {
@@ -75,7 +69,7 @@ abstract mixin class BaseGame() {
   bool get finished => status.value >= GameStatus.mate.value;
   bool get aborted => status == GameStatus.aborted;
 
-  /// Whether the game is still playable (not finished or aborted and not imported).
+  /// Whether the game is still playable (not finished or aborted).
   bool get playable => status.value < GameStatus.aborted.value && status.value != -1;
 
   /// This field is null if the game is being watched as a spectator, and
@@ -83,8 +77,6 @@ abstract mixin class BaseGame() {
   Side? get youAre;
 
   Side? get winner;
-
-  bool? get isThreefoldRepetition;
 
   Player get white;
   Player get black;
@@ -103,10 +95,47 @@ abstract mixin class BaseGame() {
       ? black
       : white;
 
-  Position get lastPosition;
+  GoPosition get initialPosition => steps.first.position;
+
+  GoPosition get lastPosition => steps.last.position;
+
+  GoMove? get lastMove => steps.last.move;
+
+  /// Number of moves played, passes included.
+  int get moveCount => steps.length - 1;
+
+  /// The moves in the format of the server: SGF coordinates, or `pass`.
+  IList<String> get moveKeys =>
+      steps.skip(1).map((step) => step.move!.key(meta.boardSize)).toIList();
+
+  GameStep stepAt(int cursor) => steps[cursor];
+
+  GoPosition positionAt(int cursor) => steps[cursor].position;
+
+  Duration? archivedClockOf(Side side, int cursor) {
+    return side == Side.white ? steps[cursor].archivedWhiteClock : steps[cursor].archivedBlackClock;
+  }
+
+  /// Both players passed and the game is not over: the players agree on the dead stones.
+  bool get inScoringPhase => playable && lastPosition.bothPassed;
+
+  /// The result as written in a game record: `B+3.5`, `W+R` (resignation), `B+T` (time), `0` for
+  /// a jigo, or null when the game is not finished.
+  String? get resultString {
+    if (!finished) return null;
+    final winner = this.winner;
+    if (winner == null) return status == GameStatus.draw ? '0' : null;
+    final letter = winner == Side.black ? 'B' : 'W';
+    return switch (status) {
+      GameStatus.variantEnd => scoring?.score.result ?? '$letter+',
+      GameStatus.resign => '$letter+R',
+      GameStatus.outoftime || GameStatus.timeout || GameStatus.noStart => '$letter+T',
+      _ => '$letter+',
+    };
+  }
 
   String shareTitle(AppLocalizations l10n) =>
-      '${meta.perf.label(l10n)} • ${l10n.resVsX(white.fullName(l10n), black.fullName(l10n))}';
+      '${meta.boardSize}×${meta.boardSize} • ${l10n.resVsX(black.fullName(l10n), white.fullName(l10n))}';
 
   /// Returns the side of the player with the given id, or null if the player is not in the game.
   Side? playerSideOf(UserId id) {
@@ -123,126 +152,49 @@ abstract mixin class BaseGame() {
     return side == Side.white ? white : black;
   }
 
-  PlayersAnalysis? get playersAnalysis => white.analysis != null && black.analysis != null
-      ? (white: white.analysis!, black: black.analysis!)
-      : null;
-
   /// The time spent on each move, in ply order, derived from [clocks].
   IList<Duration> get moveTimes =>
       moveTimesFromClocks(clocks, meta.clock?.increment ?? Duration.zero);
 
-  /// Converts the game to a tree representation
-  Root makeTree() {
-    final initial = steps.first;
-    final root = Root(position: initial.position);
-    Node current = root;
-    final clockIncrement = meta.clock?.increment ?? Duration.zero;
-    Duration? whiteClock;
-    Duration? blackClock;
-    for (var i = 1; i < steps.length; i++) {
-      final step = steps[i];
-      final eval = evals?.elementAtOrNull(i - 1);
-      final pgnEval = eval?.cp != null
-          ? PgnEvaluation.pawns(pawns: cpToPawns(eval!.cp!), depth: eval.depth)
-          : eval?.mate != null
-          ? PgnEvaluation.mate(mate: eval!.mate, depth: eval.depth)
-          : null;
-      final clock = clocks?.elementAtOrNull(i - 1);
-      Duration? emt;
-      if (clock != null) {
-        if (step.position.turn == Side.white) {
-          if (whiteClock != null) {
-            emt = whiteClock + clockIncrement - clock;
-          }
-
-          whiteClock = clock;
-        } else {
-          if (blackClock != null) {
-            emt = blackClock + clockIncrement - clock;
-          }
-          blackClock = clock;
-        }
+  /// The game record in SGF, the file format every Go program reads.
+  String makeSgf() {
+    String escape(String text) => text.replaceAll(r'\', r'\\').replaceAll(']', r'\]');
+    String name(Player player) =>
+        player.user?.name ??
+        player.name ??
+        (player.aiLevel != null ? 'KataGo level ${player.aiLevel}' : 'Anonymous');
+    final size = meta.boardSize;
+    final buffer = StringBuffer('(;GM[1]FF[4]CA[UTF-8]AP[TwoStones]')
+      ..write('SZ[$size]')
+      ..write('KM[${meta.komi}]')
+      ..write('RU[Chinese]')
+      ..write('DT[${_sgfDateFormat.format(meta.createdAt)}]')
+      ..write('PB[${escape(name(black))}]')
+      ..write('PW[${escape(name(white))}]');
+    if (black.rating != null) buffer.write('BR[${black.rating}]');
+    if (white.rating != null) buffer.write('WR[${white.rating}]');
+    final clock = meta.clock;
+    if (clock != null) {
+      buffer.write('TM[${clock.initial.inSeconds}]');
+      if (clock.increment > Duration.zero) {
+        buffer.write('OT[${clock.increment.inSeconds} fischer]');
       }
-
-      final comment = eval != null || clock != null
-          ? PgnComment(text: eval?.judgment?.comment, clock: clock, emt: emt, eval: pgnEval)
-          : null;
-      final nag = eval?.judgment != null ? _judgmentNameToNag(eval!.judgment!.name) : null;
-      final nextNode = Branch(
-        sanMove: step.sanMove!,
-        position: step.position,
-        lichessAnalysisComments: comment != null ? [comment] : null,
-        nags: nag != null ? [nag] : null,
-      );
-      current.addChild(nextNode);
-
-      // add analysis variation if any
-      final variation = eval?.variation;
-      if (variation != null) {
-        Node variationNode = current;
-        Position position = current.position;
-        final moves = variation.split(' ');
-        for (final san in moves) {
-          final move = position.parseSan(san);
-          position = position.playUnchecked(move!);
-          final child = Branch(sanMove: SanMove(san, move), position: position);
-          variationNode.addChild(child);
-          variationNode = child;
-        }
-      }
-
-      current = nextNode;
     }
-    return root;
-  }
-
-  int? _judgmentNameToNag(String name) => switch (name) {
-    'Inaccuracy' => 6,
-    'Mistake' => 2,
-    'Blunder' => 4,
-    String() => null,
-  };
-
-  String makePgn() {
-    final node = makeTree();
-    final pgn = node.makePgn(
-      IMap({
-        'Event': '${meta.rated ? 'Rated' : ''} ${meta.perf.title} game',
-        if (id case final GameId gameId) 'Site': lichessGameUri(gameId).toString(),
-        'Date': _dateFormat.format(meta.createdAt),
-        'White':
-            white.user?.name ??
-            white.name ??
-            (white.aiLevel != null ? 'Stockfish level ${white.aiLevel}' : 'Anonymous'),
-        'Black':
-            black.user?.name ??
-            black.name ??
-            (black.aiLevel != null ? 'Stockfish level ${black.aiLevel}' : 'Anonymous'),
-        'Result': status.value >= GameStatus.mate.value
-            ? winner == null
-                  ? '½-½'
-                  : winner == Side.white
-                  ? '1-0'
-                  : '0-1'
-            : '*',
-        if (white.rating != null) 'WhiteElo': white.rating!.toString(),
-        if (black.rating != null) 'BlackElo': black.rating!.toString(),
-        if (white.user?.title != null) 'WhiteTitle': white.user!.title!,
-        if (black.user?.title != null) 'BlackTitle': black.user!.title!,
-        if (white.ratingDiff != null)
-          'WhiteRatingDiff': '${white.ratingDiff! > 0 ? '+' : ''}${white.ratingDiff!}',
-        if (black.ratingDiff != null)
-          'BlackRatingDiff': '${black.ratingDiff! > 0 ? '+' : ''}${black.ratingDiff!}',
-        'Variant': meta.variant.pgnName,
-        if (meta.clock != null)
-          'TimeControl': '${meta.clock!.initial.inSeconds}+${meta.clock!.increment.inSeconds}',
-        if (initialFen != null) 'SetUp': '1',
-        'FEN': ?initialFen,
-        if (meta.opening != null) 'ECO': meta.opening!.eco,
-        if (meta.opening != null) 'Opening': meta.opening!.name,
-      }),
-    );
-    return pgn;
+    final result = resultString;
+    if (result != null) buffer.write('RE[$result]');
+    if (meta.handicap > 0) {
+      buffer.write('HA[${meta.handicap}]AB');
+      for (final point in goHandicapPoints(size, meta.handicap)) {
+        buffer.write('[${GoMove.play(point).key(size)}]');
+      }
+    }
+    for (final step in steps.skip(1)) {
+      final move = step.move!;
+      final letter = step.position.turn == Side.white ? 'B' : 'W';
+      buffer.write(';$letter[${move.isPass ? '' : move.key(size)}]');
+    }
+    buffer.write(')');
+    return buffer.toString();
   }
 }
 
@@ -252,83 +204,15 @@ abstract mixin class ServerGame() implements BaseGame {
   GameId get id;
 }
 
-/// Common interface for local games (imported from PGN or created offline).
-abstract mixin class LocalGame() implements BaseGame {
-  @override
-  StringId get id;
-
-  /// Derived from the [GameStep.clock] readings taken as the game was played.
-  ///
-  /// Null unless every move carries one: a game played without a time control has none at all,
-  /// and a game that was saved before its clocks were recorded has only the later ones, which
-  /// would not line up with the moves they are read against.
-  @override
-  IList<Duration>? get clocks {
-    final moveClocks = steps.skip(1).map((step) => step.clock).toIList();
-    return moveClocks.isEmpty || moveClocks.any((clock) => clock == null)
-        ? null
-        : moveClocks.map((clock) => clock!).toIList();
-  }
-}
-
-/// A mixin that provides methods to access game data at a specific step.
-mixin IndexableSteps on BaseGame {
-  String get sanMoves => steps.where((e) => e.sanMove != null).map((e) => e.sanMove!.san).join(' ');
-
-  MaterialDiffSide? materialDiffAt(int cursor, Side side) => steps[cursor].diff?.bySide(side);
-
-  GameStep stepAt(int cursor) => steps[cursor];
-
-  String fenAt(int cursor) => steps[cursor].position.fen;
-
-  Move? moveAt(int cursor) {
-    return steps[cursor].sanMove?.move;
-  }
-
-  Position positionAt(int cursor) => steps[cursor].position;
-
-  Duration? archivedWhiteClockAt(int cursor) => steps[cursor].archivedWhiteClock;
-
-  Duration? archivedBlackClockAt(int cursor) => steps[cursor].archivedBlackClock;
-
-  Duration? archivedClockOf(Side side, int cursor) {
-    return side == Side.white ? steps[cursor].archivedWhiteClock : steps[cursor].archivedBlackClock;
-  }
-
-  Move? get lastMove {
-    return steps.last.sanMove?.move;
-  }
-
-  Position get initialPosition => steps.first.position;
-  int get initialPly => steps.first.position.ply;
-
-  @override
-  Position get lastPosition => steps.last.position;
-
-  int get lastPly => steps.last.position.ply;
-
-  MaterialDiffSide? lastMaterialDiffAt(Side side) => steps.last.diff?.bySide(side);
-}
-
 enum GameSource() {
   lobby,
   friend,
   ai,
   api,
-  arena,
-  position,
-  import,
-  importLive,
-  simul,
-  relay,
   pool,
-  swiss,
   unknown;
 
   static final nameMap = IMap(GameSource.values.asNameMap());
-
-  /// Whether the game was imported on lichess, and thus not played on the site.
-  bool get isImport => this == GameSource.import || this == GameSource.importLive;
 }
 
 enum GameRule() {
@@ -344,29 +228,14 @@ enum GameRule() {
 sealed class const ServerGamePrefs._() with _$ServerGamePrefs {
   const factory({
     required bool showRatings,
-    required bool enablePremove,
-    required AutoQueen autoQueen,
     required bool confirmResign,
     required bool submitMove,
     required Zen zenMode,
   }) = _ServerGamePrefs;
 }
 
-@Freezed(fromJson: true, toJson: true)
-sealed class const TournamentMeta._() with _$TournamentMeta {
-  const factory({
-    required TournamentId id,
-    required String name,
-    required ({Duration timeLeft, DateTime at}) clock,
-    required bool berserkable,
-    ({int white, int black})? ranks,
-  }) = _TournamentMeta;
-
-  factory fromJson(Map<String, dynamic> json) => _$TournamentMetaFromJson(json);
-
-  bool get isOngoing => clock.timeLeft > Duration.zero;
-  bool get isFinished => clock.timeLeft <= Duration.zero;
-}
+/// The komi the server gives a game: 7.5 points, or half a point in a handicap game.
+double defaultKomi({required int handicap}) => handicap > 0 ? 0.5 : 7.5;
 
 @Freezed(fromJson: true, toJson: true)
 sealed class const GameMeta._() with _$GameMeta {
@@ -374,7 +243,15 @@ sealed class const GameMeta._() with _$GameMeta {
   const factory({
     required DateTime createdAt,
     required bool rated,
-    required Variant variant,
+
+    /// Number of lines on each side of the board: 9, 13 or 19.
+    required int boardSize,
+
+    /// Points given to White to make up for playing second.
+    required double komi,
+
+    /// Number of stones Black starts with, 0 for an even game.
+    @Default(0) int handicap,
     required Speed speed,
     required Perf perf,
     ({
@@ -391,21 +268,12 @@ sealed class const GameMeta._() with _$GameMeta {
     int? daysPerTurn,
     int? startedAtTurn,
     ISet<GameRule>? rules,
-
-    /// Opening of the game, only available once finished
-    LightOpening? opening,
-
-    /// Game phases of the game, only avaible once finished
-    Division? division,
-
-    /// Only if this game is part of an arena or swiss tournament
-    TournamentMeta? tournament,
   }) = _GameMeta;
 
   factory fromJson(Map<String, dynamic> json) => _$GameMetaFromJson(json);
 }
 
-/// The [GameMeta.clock] of a locally played game, null if it is played without a time control.
+/// The [GameMeta.clock] of a game played with [timeIncrement], null if it has no time control.
 ({Duration initial, Duration increment, Duration? emergency, Duration? moreTime})? clockMetaOf(
   TimeIncrement timeIncrement,
 ) => timeIncrement.isInfinite
@@ -424,8 +292,7 @@ sealed class const CorrespondenceClockData._() with _$CorrespondenceClockData {
     required Duration black,
     // Opaque token that the CorrespondenceClock widget uses to detect a new
     // server-authoritative reading and reset its displayed time. Excluded from
-    // JSON so that serialized games always deserialize to resetId == 0, which
-    // is fine: the offline screen drives resets via lastModified instead.
+    // JSON so that serialized games always deserialize to resetId == 0.
     @JsonKey(includeFromJson: false, includeToJson: false) @Default(0) int resetId,
   }) = _CorrespondenceClockData;
 
@@ -434,74 +301,184 @@ sealed class const CorrespondenceClockData._() with _$CorrespondenceClockData {
   Duration forSide(Side side) => side == Side.white ? white : black;
 }
 
-typedef CorrespondenceForecast = IList<IList<SanMove>>;
-
-@freezed
-sealed class GameStep with _$GameStep {
+/// The count of a game with area (Chinese) rules: stones on the board plus surrounded territory,
+/// plus [komi] for White.
+@Freezed(fromJson: true, toJson: true)
+sealed class const GoScore._() with _$GoScore {
   const factory({
-    required Position position,
-    SanMove? sanMove,
-    MaterialDiff? diff,
+    required double black,
+    required double white,
+    required double komi,
 
-    /// The remaining white clock time at this step. Only available when the
-    /// game is finished.
-    Duration? archivedWhiteClock,
+    /// The result as written in a game record, `B+3.5` or `W+0.5`.
+    required String result,
+    required int blackTerritory,
+    required int whiteTerritory,
+    required int blackStones,
+    required int whiteStones,
 
-    /// The remaining black clock time at this step. Only available when the
-    /// game is finished.
-    Duration? archivedBlackClock,
+    /// The empty or dead points that count for Black.
+    @Default(ISetConst<int>({})) ISet<int> blackArea,
 
-    /// The time left to the side that just played this step's move, increment included.
-    ///
-    /// Only set for locally played games with a time control (over the board, or against the
-    /// engine); server games carry their clocks in [archivedWhiteClock] and [archivedBlackClock]
-    /// instead.
-    Duration? clock,
-  }) = _GameStep;
+    /// The empty or dead points that count for White.
+    @Default(ISetConst<int>({})) ISet<int> whiteArea,
+  }) = _GoScore;
+
+  factory fromJson(Map<String, dynamic> json) => _$GoScoreFromJson(json);
+
+  /// Reads the score as the server sends it.
+  factory fromServerJson(Map<String, dynamic> json) => GoScore.fromPick(pick(json).required());
+
+  factory fromPick(RequiredPick pick) {
+    final ownership = pick('ownership').asListOrEmpty(
+      (entry) => entry.asListOrThrow((value) => value.asIntOrThrow()),
+    );
+    return GoScore(
+    black: pick('black').asDoubleOrThrow(),
+    white: pick('white').asDoubleOrThrow(),
+    komi: pick('komi').asDoubleOrThrow(),
+    result: pick('result').asStringOrThrow(),
+    blackTerritory: pick('territory', 'black').asIntOrThrow(),
+    whiteTerritory: pick('territory', 'white').asIntOrThrow(),
+    blackStones: pick('stones', 'black').asIntOrThrow(),
+    whiteStones: pick('stones', 'white').asIntOrThrow(),
+    blackArea: ISet(ownership.where((pair) => pair[1] == 1).map((pair) => pair[0])),
+    whiteArea: ISet(ownership.where((pair) => pair[1] != 1).map((pair) => pair[0])),
+  );
+  }
+
+  /// The side each empty or dead point counts for.
+  IMap<int, Side> get ownership => IMap({
+    for (final point in blackArea) point: Side.black,
+    for (final point in whiteArea) point: Side.white,
+  });
+
+  double pointsOf(Side side) => side == Side.black ? black : white;
 }
 
-/// Converts a list of [GameStep]s to a JSON list.
-String stepsToJson(IList<GameStep> steps) {
-  final objs = steps
-      .mapIndexed(
-        (i, e) => {
-          if (i == 0) 'fen': e.position.fen,
-          if (i == 0) 'rule': e.position.rule.name,
-          'uci': e.sanMove?.move.uci,
-          'san': e.sanMove?.san,
-          if (e.clock != null) 'clk': e.clock!.inMilliseconds,
-        },
-      )
-      .toList(growable: false);
-  return jsonEncode(objs);
+/// The state of the counting phase: the stones marked dead, who accepted the count, and the count.
+@Freezed(fromJson: true, toJson: true)
+sealed class const GoScoring._() with _$GoScoring {
+  const factory({
+    @Default(ISetConst<int>({})) ISet<int> dead,
+    @Default(ISetConst<Side>({})) ISet<Side> accepted,
+    required GoScore score,
+  }) = _GoScoring;
+
+  factory fromJson(Map<String, dynamic> json) => _$GoScoringFromJson(json);
+
+  factory fromServerJson(Map<String, dynamic> json) => GoScoring.fromPick(pick(json).required());
+
+  factory fromPick(RequiredPick pick) => GoScoring(
+    dead: ISet(pick('dead').asListOrEmpty((point) => point.asIntOrThrow())),
+    accepted: ISet(
+      pick('accepted').asListOrEmpty((side) => Side.fromName(side.asStringOrThrow())!),
+    ),
+    score: pick('score').letOrThrow(GoScore.fromPick),
+  );
 }
 
-/// Converts a JSON list to a list of [GameStep]s.
-IList<GameStep> stepsFromJson(String json) {
-  final objs = jsonDecode(json) as List<dynamic>;
-  final first = objs.first as Map<String, dynamic>;
-  final initialFen = first['fen'] as String;
-  final rule = Rule.values.byName(first['rule'] as String);
-  Position position = Position.setupPosition(rule, Setup.parseFen(initialFen));
-  final List<GameStep> steps = [GameStep(position: position)];
-  for (final obj in objs.skip(1)) {
-    final step = obj as Map<String, dynamic>;
-    final uci = step['uci'] as String?;
-    final san = step['san'] as String?;
-    if (uci == null || san == null) {
-      break;
+/// A position of a game, and the move that led to it.
+@immutable
+class const GameStep({
+  required final GoPosition position,
+  /// The move that led to [position], null for the first step of a game.
+  final GoMove? move,
+  /// The remaining white clock time at this step. Only available when the game is finished.
+  final Duration? archivedWhiteClock,
+  /// The remaining black clock time at this step. Only available when the game is finished.
+  final Duration? archivedBlackClock,
+});
+
+/// The steps of a game played with [moves] on a board of [boardSize] lines.
+///
+/// [clocks] holds the time left to the player after each move, when known.
+IList<GameStep> makeGameSteps({
+  required int boardSize,
+  int handicap = 0,
+  required Iterable<String> moves,
+  IList<Duration>? clocks,
+  Duration? initialClock,
+}) {
+  final positions = replayGoGame(size: boardSize, handicap: handicap, moves: moves);
+  Duration? white = initialClock;
+  Duration? black = initialClock;
+  final steps = <GameStep>[];
+  for (final (index, position) in positions.indexed) {
+    if (index > 0) {
+      final clock = clocks != null && index - 1 < clocks.length ? clocks[index - 1] : null;
+      if (clock != null) {
+        // the side to play in this position is not the one that just moved
+        if (position.turn == Side.white) {
+          black = clock;
+        } else {
+          white = clock;
+        }
+      }
     }
-    final move = Move.parse(uci)!;
-    final clock = step['clk'] as int?;
-    position = position.playUnchecked(move);
     steps.add(
       GameStep(
         position: position,
-        sanMove: SanMove(san, move),
-        diff: MaterialDiff.fromPosition(position),
-        clock: clock != null ? Duration(milliseconds: clock) : null,
+        move: position.lastMove,
+        archivedWhiteClock: clocks != null ? white : null,
+        archivedBlackClock: clocks != null ? black : null,
       ),
     );
   }
-  return steps.toIList();
+  return steps.lock;
+}
+
+/// Converts a list of [GameStep]s to JSON, for local storage.
+String stepsToJson(IList<GameStep> steps) {
+  final first = steps.first.position;
+  return jsonEncode({
+    'size': first.size,
+    'initial': first.boardString,
+    'turn': first.turn.name,
+    'moves': [for (final step in steps.skip(1)) step.move!.key(first.size)],
+    'wc': [for (final step in steps) step.archivedWhiteClock?.inMilliseconds],
+    'bc': [for (final step in steps) step.archivedBlackClock?.inMilliseconds],
+  });
+}
+
+/// Converts the JSON written by [stepsToJson] back to a list of [GameStep]s.
+IList<GameStep> stepsFromJson(String json) {
+  final data = jsonDecode(json) as Map<String, dynamic>;
+  final size = data['size'] as int;
+  final whiteClocks = (data['wc'] as List<dynamic>?)?.cast<int?>();
+  final blackClocks = (data['bc'] as List<dynamic>?)?.cast<int?>();
+  Duration? clockAt(List<int?>? clocks, int index) {
+    final millis = clocks != null && index < clocks.length ? clocks[index] : null;
+    return millis != null ? Duration(milliseconds: millis) : null;
+  }
+
+  var position = GoPosition.fromBoardString(
+    data['initial'] as String,
+    turn: Side.fromName(data['turn'] as String)!,
+  );
+  final steps = [
+    GameStep(
+      position: position,
+      archivedWhiteClock: clockAt(whiteClocks, 0),
+      archivedBlackClock: clockAt(blackClocks, 0),
+    ),
+  ];
+  for (final key in (data['moves'] as List<dynamic>).cast<String>()) {
+    final move = GoMove.fromKey(key, size);
+    if (move == null) break;
+    try {
+      position = position.play(move);
+    } on GoMoveException {
+      break;
+    }
+    steps.add(
+      GameStep(
+        position: position,
+        move: move,
+        archivedWhiteClock: clockAt(whiteClocks, steps.length),
+        archivedBlackClock: clockAt(blackClocks, steps.length),
+      ),
+    );
+  }
+  return steps.lock;
 }

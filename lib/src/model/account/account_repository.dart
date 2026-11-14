@@ -51,10 +51,7 @@ class AccountRepository(final LichessClient client, final Aggregator aggregator)
         if (json is! List<dynamic>) {
           throw Exception('Could not read json object as {nowPlaying: []}');
         }
-        return json
-            .map((e) => OngoingGame.fromServerJson(e as Map<String, dynamic>))
-            .where((e) => e.variant.isPlaySupported)
-            .toIList();
+        return json.map((e) => OngoingGame.fromServerJson(e as Map<String, dynamic>)).toIList();
       },
     );
   }

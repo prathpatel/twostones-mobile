@@ -1,16 +1,13 @@
 import 'dart:async';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/model/game/game.dart';
-import 'package:lichess_mobile/src/model/game/material_diff.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/network/socket.dart';
 import 'package:lichess_mobile/src/service/sound_service.dart';
-import 'package:lichess_mobile/src/styles/lichess_colors.dart';
-import 'package:lichess_mobile/src/styles/lichess_icons.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 import 'package:lichess_mobile/src/utils/lichess_assets.dart';
@@ -19,20 +16,24 @@ import 'package:lichess_mobile/src/view/account/rating_pref_aware.dart';
 import 'package:lichess_mobile/src/view/user/user_or_profile_screen.dart';
 import 'package:lichess_mobile/src/widgets/buttons.dart';
 import 'package:lichess_mobile/src/widgets/clock.dart';
-import 'package:lichess_mobile/src/widgets/material_diff.dart';
 import 'package:lichess_mobile/src/widgets/network_image.dart';
 import 'package:lichess_mobile/src/widgets/user.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// A widget to display player information above/below the chess board.
+/// A widget to display player information above/below the board: the colour of the player's
+/// stones, their name and rating, and the stones they captured.
 class const GamePlayer({
   required final BaseGame game,
   required final Side side,
   final Uri? socketUri,
   final double? matchupScore,
   final Widget? clock,
-  final MaterialDiffSide? materialDiff,
-  final MaterialDifferenceFormat? materialDifferenceFormat,
+
+  /// Number of stones this player captured.
+  final int? prisoners,
+
+  /// The points of this player in the count, shown once the game is being counted or is over.
+  final double? points,
 
   /// if confirm move preference is enabled, used to display confirmation buttons
   final ({VoidCallback confirm, VoidCallback cancel})? confirmMoveCallbacks,
@@ -43,7 +44,6 @@ class const GamePlayer({
     (Duration, DateTime) countdown,
     bool canClaim,
     VoidCallback onClaimWin,
-    VoidCallback onClaimDraw,
   })?
   opponentLeftCallbacks,
 
@@ -61,8 +61,6 @@ class const GamePlayer({
     final playerFontSize = isShortVerticalScreen(context) ? 15.0 : 16.0;
 
     final player = game.playerOf(side);
-
-    final tournament = game.meta.tournament;
 
     final playerWidget = Column(
       mainAxisSize: MainAxisSize.min,
@@ -93,11 +91,8 @@ class const GamePlayer({
                 ),
                 const SizedBox(width: 5),
               ],
-              if (tournament?.ranks != null)
-                Text(
-                  '#${side == Side.white ? tournament?.ranks?.white : tournament?.ranks?.black} ',
-                  style: TextStyle(fontSize: playerFontSize, color: textShade(context, 0.7)),
-                ),
+              _StoneIcon(side: side, size: playerFontSize),
+              const SizedBox(width: 6),
               if (player.user != null) ...[
                 Consumer(
                   builder: (context, ref, _) {
@@ -177,23 +172,17 @@ class const GamePlayer({
                     style: TextStyle(fontSize: 14, color: textShade(context, 0.7)),
                   ),
                 ),
-              if (player.berserk == true) ...[
-                const SizedBox(width: 5),
-                Icon(
-                  LichessIcons.body_cut,
-                  color: LichessColors.brag,
-                  size: playerFontSize,
-                  semanticLabel: context.l10n.arenaBerserk,
-                ),
-              ],
             ],
           ),
         if (timeToMove != null)
           MoveExpiration(timeToMove: timeToMove!, mePlaying: mePlaying)
         else
-          MaterialDifferenceDisplay(
-            materialDiff: materialDiff,
-            materialDifferenceFormat: materialDifferenceFormat,
+          Text(
+            [
+              if (points != null) '${_formatPoints(points!)} points',
+              if (prisoners != null) '$prisoners captured',
+            ].join(' • '),
+            style: TextStyle(fontSize: 13, color: textShade(context, 0.7)),
           ),
       ],
     );
@@ -207,7 +196,6 @@ class const GamePlayer({
           countdown: opponentLeftCallbacks!.countdown,
           canClaim: opponentLeftCallbacks!.canClaim,
           onClaimWin: opponentLeftCallbacks!.onClaimWin,
-          onClaimDraw: opponentLeftCallbacks!.onClaimDraw,
         ),
       );
     }
@@ -247,6 +235,29 @@ class const GamePlayer({
           ),
         if (clock != null && clockPosition == ClockPosition.right) Flexible(flex: 3, child: clock!),
       ],
+    );
+  }
+}
+
+String _formatPoints(double points) =>
+    points == points.roundToDouble() ? points.toStringAsFixed(0) : points.toStringAsFixed(1);
+
+/// A small stone of the colour the player plays.
+class const _StoneIcon({required final Side side, required final double size})
+    extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: side == Side.black ? context.l10n.black : context.l10n.white,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: .circle,
+          color: side == Side.black ? const Color(0xFF1B1B1B) : const Color(0xFFF2F2F2),
+          border: Border.all(color: textShade(context, 0.5) ?? const Color(0xFF808080), width: 0.8),
+        ),
+      ),
     );
   }
 }
@@ -299,7 +310,6 @@ class const OpponentLeftCountdown({
   required final (Duration, DateTime) countdown,
   required final bool canClaim,
   required final VoidCallback onClaimWin,
-  required final VoidCallback onClaimDraw,
   super.key,
 }) extends StatelessWidget {
   @override
@@ -341,36 +351,8 @@ class const OpponentLeftCountdown({
                 ),
               ),
             ),
-            Flexible(
-              child: OpacityButton(
-                semanticsLabel: context.l10n.forceDraw,
-                onPressed: onClaimDraw,
-                child: Text(
-                  context.l10n.forceDraw,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: ColorScheme.of(context).secondary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
-        // The explanatory text comes second and is dropped entirely on short
-        // screens, where every pixel counts and the buttons take priority.
-        if (!isShortVerticalScreen(context)) ...[
-          const SizedBox(height: 8.0),
-          Text(
-            context.l10n.opponentLeftChoices,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
       ],
     );
   }

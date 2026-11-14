@@ -223,15 +223,14 @@ class ChallengeService(final Ref ref) {
   }) {
     showAdaptiveActionSheet<void>(
       context: context,
-      title: challenge.challenger != null && challenge.variant.isPlaySupported
+      title: challenge.challenger != null
           ? Text(
               title ??
                   '${challenge.challenger!.user.name} challenges you: ${challenge.description(context.l10n)}',
             )
           : null,
       actions: [
-        if (challenge.variant.isPlaySupported)
-          BottomSheetAction(
+        BottomSheetAction(
             makeLabel: (context) => Text(context.l10n.accept),
             leading: Icon(Icons.check, color: context.lichessColors.green),
             isDefaultAction: true,

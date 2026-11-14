@@ -1,4 +1,3 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
@@ -6,6 +5,7 @@ import 'package:lichess_mobile/src/model/account/ongoing_game.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/playable_game.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 
 class OngoingGamesNotifier() extends AsyncNotifier<IList<OngoingGame>> {
@@ -39,15 +39,15 @@ class OngoingGamesNotifier() extends AsyncNotifier<IList<OngoingGame>> {
       id: game.id,
       fullId: id,
       orientation: me,
-      fen: game.lastPosition.fen,
+      boardSize: game.meta.boardSize,
+      board: game.lastPosition.boardString,
       perf: game.meta.perf,
       speed: game.meta.speed,
-      variant: game.meta.variant,
       opponent: game.opponent?.user,
       isMyTurn: game.isMyTurn,
       opponentRating: game.opponent?.rating,
       opponentAiLevel: game.opponent?.aiLevel,
-      lastMove: game.lastMove,
+      lastMove: game.lastMove?.key(game.meta.boardSize),
       secondsLeft:
           game.clock?.forSide(me).inSeconds ?? game.correspondenceClock?.forSide(me).inSeconds,
     );

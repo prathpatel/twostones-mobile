@@ -59,9 +59,7 @@ class const OngoingGamePreview({
   Widget build(BuildContext context, WidgetRef ref) {
     return SmallBoardPreview(
       padding: padding,
-      orientation: game.orientation,
-      lastMove: game.lastMove,
-      fen: game.fen,
+      position: game.position,
       description: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -91,12 +89,7 @@ class const OngoingGamePreview({
         Navigator.of(context).pushHidingTabBar(
           GameScreen.buildRoute(
             source: ExistingGameSource(game.fullId),
-            loadingPosition: (
-              variant: game.variant,
-              fen: game.fen,
-              orientation: game.orientation,
-              lastMove: game.lastMove,
-            ),
+            loadingPosition: game.position,
           ),
         );
       },

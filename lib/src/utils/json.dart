@@ -4,7 +4,6 @@ import 'dart:ui' show Locale;
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:json_annotation/json_annotation.dart';
-import 'package:lichess_mobile/src/model/common/uci.dart';
 import 'package:logging/logging.dart';
 
 final _logger = Logger('JsonUtils');
@@ -63,38 +62,6 @@ class const LocaleConverter() implements JsonConverter<Locale?, Map<String, dyna
             'scriptCode': locale.scriptCode,
           }
         : null;
-  }
-}
-
-extension UciExtension on Pick {
-  /// Matches a UciCharPair from a string.
-  UciCharPair asUciCharPairOrThrow() {
-    final value = required().asStringOrThrow();
-    return UciCharPair.fromStringId(value);
-  }
-
-  UciCharPair? asUciCharPairOrNull() {
-    if (value == null) return null;
-    try {
-      return asUciCharPairOrThrow();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Matches a UciPath from a string.
-  UciPath asUciPathOrThrow() {
-    final value = required().asStringOrThrow();
-    return UciPath(value);
-  }
-
-  UciPath? asUciPathOrNull() {
-    if (value == null) return null;
-    try {
-      return asUciPathOrThrow();
-    } catch (_) {
-      return null;
-    }
   }
 }
 

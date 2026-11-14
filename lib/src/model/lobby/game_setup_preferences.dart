@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
 import 'package:lichess_mobile/src/model/common/time_increment.dart';
@@ -39,8 +38,8 @@ class GameSetupPreferences()
     return save(state.copyWith(timeIncrement: timeInc));
   }
 
-  Future<void> setCustomVariant(Variant variant) {
-    return save(state.copyWith(customVariant: variant));
+  Future<void> setBoardSize(int boardSize) {
+    return save(state.copyWith(boardSize: boardSize));
   }
 
   Future<void> setCustomRated(bool rated) {
@@ -61,21 +60,21 @@ sealed class const GameSetupPrefs._() with _$GameSetupPrefs implements Serializa
   const factory({
     required TimeIncrement timeIncrement,
     required int customDaysPerTurn,
-    required Variant customVariant,
+
+    /// Number of lines on each side of the board: 9, 13 or 19.
+    @Default(kDefaultBoardSize) int boardSize,
     required bool customRated,
     required (int, int) customRatingDelta,
   }) = _GameSetupPrefs;
 
   static const defaults = GameSetupPrefs(
     timeIncrement: TimeIncrement(600, 0),
-    customVariant: Variant.standard,
     customRated: true,
     customRatingDelta: kDefaultRatingDelta,
     customDaysPerTurn: 3,
   );
 
-  Perf get realTimePerf =>
-      Perf.fromVariantAndSpeed(customVariant, Speed.fromTimeIncrement(timeIncrement));
+  Perf get realTimePerf => Perf.fromSpeed(Speed.fromTimeIncrement(timeIncrement));
 
   /// Returns the real time rating range for the custom setup.
   ///
@@ -113,6 +112,9 @@ sealed class const GameSetupPrefs._() with _$GameSetupPrefs implements Serializa
     }
   }
 }
+
+/// The board size offered first: the full board.
+const kDefaultBoardSize = 19;
 
 const kDefaultRatingDelta = (-500, 500);
 

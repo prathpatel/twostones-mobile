@@ -1,6 +1,5 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/service/sound_service.dart';
 
@@ -10,39 +9,23 @@ final moveFeedbackServiceProvider = Provider<MoveFeedbackService>((Ref ref) {
   return MoveFeedbackService(soundService, ref);
 }, name: 'MoveFeedbackServiceProvider');
 
+/// The sound and the vibration of a stone being played.
 class MoveFeedbackService(final SoundService _soundService, final Ref _ref) {
-  void moveFeedback({bool check = false}) {
+  /// A stone was played, or a player passed.
+  void moveFeedback() {
     _soundService.play(Sound.move);
-
-    if (_ref.read(boardPreferencesProvider).hapticFeedback) {
-      if (check) {
-        HapticFeedback.mediumImpact();
-      } else {
-        HapticFeedback.lightImpact();
-      }
-    }
+    _haptic();
   }
 
-  /// The feedback for a standard chess move written as [san]: a capture or a move, with or without
-  /// a check.
-  void playedMove(String san) {
-    final check = san.contains('+') || san.contains('#');
-    if (san.contains('x')) {
-      captureFeedback(Variant.standard, check: check);
-    } else {
-      moveFeedback(check: check);
-    }
+  /// A stone was played and took stones off the board.
+  void captureFeedback() {
+    _soundService.play(Sound.capture);
+    _haptic();
   }
 
-  void captureFeedback(Variant variant, {bool check = false}) {
-    _soundService.playCaptureSound(variant);
-
+  void _haptic() {
     if (_ref.read(boardPreferencesProvider).hapticFeedback) {
-      if (check) {
-        HapticFeedback.mediumImpact();
-      } else {
-        HapticFeedback.lightImpact();
-      }
+      HapticFeedback.lightImpact();
     }
   }
 }

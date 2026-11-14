@@ -1,6 +1,5 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:lichess_mobile/src/constants.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/color_palette.dart';
@@ -60,7 +59,6 @@ ThemeData makeAppTheme(
   required (BackgroundColor, bool)? backgroundColor,
   required BackgroundImage? backgroundImage,
   required bool systemColors,
-  required BoardTheme boardTheme,
 }) {
   final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
   final isForcedDarkMode = backgroundColor != null || backgroundImage != null;
@@ -77,7 +75,6 @@ ThemeData makeAppTheme(
           brightness,
           themeMode: themeMode,
           systemColors: systemColors,
-          boardTheme: boardTheme,
           isIOS: isIOS,
         )
       : _makeBackgroundImageTheme(
@@ -92,7 +89,7 @@ ThemeData makeAppTheme(
   // The elements next to the board don't follow the app color scheme (system colors, background,
   // iOS accent colors): the fidelity variant keeps their colors close to the board ones.
   final boardColorScheme = ColorScheme.fromSeed(
-    seedColor: boardTheme.colors.darkSquare,
+    seedColor: kBoardWoodColor,
     brightness: brightness,
     dynamicSchemeVariant: .fidelity,
   );
@@ -152,7 +149,6 @@ ThemeData _makeDefaultTheme(
   Brightness brightness, {
   required BackgroundThemeMode themeMode,
   required bool systemColors,
-  required BoardTheme boardTheme,
   required bool isIOS,
 }) {
   final dynamicColorSchemes = getDynamicColorSchemes();
@@ -163,13 +159,13 @@ ThemeData _makeDefaultTheme(
   final hasSystemColors = systemScheme != null && systemColors;
 
   final neutralScheme = ColorScheme.fromSeed(
-    seedColor: boardTheme.colors.darkSquare,
+    seedColor: kBoardWoodColor,
     brightness: brightness,
     dynamicSchemeVariant: isIOS ? .monochrome : .neutral,
   );
   final defaultScheme = isIOS
-      ? makeIOSAccentColorScheme(seedColor: boardTheme.colors.darkSquare, brightness: brightness)
-      : ColorScheme.fromSeed(seedColor: boardTheme.colors.darkSquare, brightness: brightness);
+      ? makeIOSAccentColorScheme(seedColor: kBoardWoodColor, brightness: brightness)
+      : ColorScheme.fromSeed(seedColor: kBoardWoodColor, brightness: brightness);
   // makes a theme with neutral surfaces and default colors
   final boardScheme = defaultScheme.copyWith(
     surface: neutralScheme.surface,

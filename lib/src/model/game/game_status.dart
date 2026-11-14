@@ -17,6 +17,8 @@ enum GameStatus(final int value) {
 
   /// When a player leaves the game.
   timeout(33),
+
+  /// A jigo: the game was counted and both players have the same number of points.
   draw(34),
 
   /// When a player runs out of time (clock flags).
@@ -32,7 +34,7 @@ enum GameStatus(final int value) {
   /// If a player offers a draw and their opponent has insufficient material to win, the game is called a draw.
   insufficientMaterialClaim(39),
 
-  /// Chess variant special endings.
+  /// The game was counted and one player has more points.
   variantEnd(60);
 
   static final nameMap = IMap(GameStatus.values.asNameMap());

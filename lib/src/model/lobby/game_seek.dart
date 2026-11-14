@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:lichess_mobile/src/binding/binding.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/common/perf.dart';
 import 'package:lichess_mobile/src/model/common/speed.dart';
@@ -19,11 +18,7 @@ import 'package:lichess_mobile/src/model/user/user.dart';
 part 'game_seek.freezed.dart';
 part 'game_seek.g.dart';
 
-/// A seek is a request to play a game with a specific time control, variant,
-/// and rating range.
-///
-/// See corresponding API docs:
-/// https://lichess.org/api#tag/Board/operation/apiBoardSeek
+/// A seek is a request to play a game with a specific board size, time control and rating range.
 @Freezed(fromJson: true, toJson: true)
 sealed class const GameSeek._() with _$GameSeek {
   @Assert(
@@ -35,7 +30,9 @@ sealed class const GameSeek._() with _$GameSeek {
     (Duration time, Duration increment)? clock,
     int? days,
     required bool rated,
-    Variant? variant,
+
+    /// Number of lines on each side of the board: 9, 13 or 19.
+    @Default(kDefaultBoardSize) int boardSize,
 
     /// Rating range
     (int, int)? ratingRange,
@@ -45,8 +42,9 @@ sealed class const GameSeek._() with _$GameSeek {
   }) = _GameSeek;
 
   /// Construct a fast pairing game seek from a predefined time control.
-  factory fastPairing(TimeIncrement setup, AuthUser? authUser) {
+  factory fastPairing(TimeIncrement setup, AuthUser? authUser, {required int boardSize}) {
     return GameSeek(
+      boardSize: boardSize,
       clock: (Duration(seconds: setup.time), Duration(seconds: setup.increment)),
       rated: authUser != null,
     );
@@ -60,7 +58,7 @@ sealed class const GameSeek._() with _$GameSeek {
         Duration(seconds: setup.timeIncrement.increment),
       ),
       rated: account != null && setup.customRated,
-      variant: setup.customVariant,
+      boardSize: setup.boardSize,
       ratingRange: account != null ? setup.realTimeRatingRange(account) : null,
     );
   }
@@ -69,21 +67,21 @@ sealed class const GameSeek._() with _$GameSeek {
   factory correspondence(GameSetupPrefs setup, User? account) {
     return GameSeek(
       days: setup.customDaysPerTurn,
-      rated: account != null && setup.customVariant == Variant.standard && setup.customRated,
-      variant: setup.customVariant,
+      rated: account != null && setup.customRated,
+      boardSize: setup.boardSize,
       ratingRange: account != null ? setup.correspondenceRatingRange(account) : null,
     );
   }
 
   /// Construct a game seek from a playable game to find a new opponent, using
-  /// the same time control, variant and rated status.
+  /// the same board size, time control and rated status.
   factory newOpponentFromGame(PlayableGame game, GameSetupPrefs setup) {
     return GameSeek(
       clock: game.meta.clock != null
           ? (game.meta.clock!.initial, game.meta.clock!.increment)
           : null,
       rated: game.meta.rated,
-      variant: game.meta.variant,
+      boardSize: game.meta.boardSize,
       ratingDelta: game.source == GameSource.lobby ? setup.customRatingDelta : null,
     );
   }
@@ -104,17 +102,19 @@ sealed class const GameSeek._() with _$GameSeek {
   TimeIncrement? get timeIncrement =>
       clock != null ? TimeIncrement(clock!.$1.inSeconds, clock!.$2.inSeconds) : null;
 
-  Perf get perf => Perf.fromVariantAndSpeed(
-    variant ?? Variant.standard,
+  Perf get perf => Perf.fromSpeed(
     timeIncrement != null ? Speed.fromTimeIncrement(timeIncrement!) : Speed.correspondence,
   );
 
+  /// The fields of the lobby form of the server (`POST /setup/hook/:sri`).
   Map<String, String> get requestBody => {
-    if (clock != null) 'time': (clock!.$1.inSeconds / 60).toString(),
-    if (clock != null) 'increment': clock!.$2.inSeconds.toString(),
-    if (days != null) 'days': days.toString(),
-    'rated': rated.toString(),
-    if (variant != null) 'variant': variant!.name,
+    'size': boardSize.toString(),
+    // 1 is a real time game, 2 a correspondence game
+    'timeMode': clock != null ? '1' : '2',
+    'time': ((clock?.$1.inSeconds ?? 300) / 60).toString(),
+    'increment': (clock?.$2.inSeconds ?? 0).toString(),
+    'days': (days ?? 2).toString(),
+    'mode': rated ? '1' : '0',
     if (ratingRange != null) 'ratingRange': '${ratingRange!.$1}-${ratingRange!.$2}',
   };
 

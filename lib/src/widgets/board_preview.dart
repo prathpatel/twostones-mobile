@@ -1,41 +1,25 @@
-import 'package:chessground/chessground.dart';
-import 'package:dartchess/dartchess.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lichess_mobile/src/constants.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
-import 'package:lichess_mobile/src/utils/l10n_context.dart';
-import 'package:lichess_mobile/src/widgets/feedback.dart';
+import 'package:lichess_mobile/src/widgets/board_thumbnail.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// A board preview with a description.
-class SmallBoardPreview extends ConsumerWidget {
+class SmallBoardPreview extends StatelessWidget {
   const new({
-    required this.orientation,
-    required this.fen,
+    required GoPosition this.position,
     required this.description,
     this.padding,
-    this.lastMove,
     this.onTap,
   }) : _showLoadingPlaceholder = false;
 
   const new loading({this.padding})
-    : orientation = Side.white,
-      fen = kEmptyFEN,
-      lastMove = null,
+    : position = null,
       description = const SizedBox.shrink(),
       onTap = null,
       _showLoadingPlaceholder = true;
 
-  /// Side by which the board is oriented.
-  final Side orientation;
-
-  /// FEN string describing the position of the board.
-  final String fen;
-
-  /// Last move played, used to highlight corresponding squares.
-  final Move? lastMove;
+  /// The stones to show, null for the loading placeholder.
+  final GoPosition? position;
 
   final Widget description;
 
@@ -46,9 +30,7 @@ class SmallBoardPreview extends ConsumerWidget {
   final bool _showLoadingPlaceholder;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final boardPrefs = ref.watch(boardPreferencesProvider);
-
+  Widget build(BuildContext context) {
     final content = LayoutBuilder(
       builder: (context, constraints) {
         final boardSize =
@@ -71,23 +53,7 @@ class SmallBoardPreview extends ConsumerWidget {
                     ),
                   )
                 else
-                  StaticChessboard(
-                    size: boardSize,
-                    fen: fen,
-                    orientation: orientation,
-                    lastMove: lastMove,
-                    settings: StaticChessboardSettings(
-                      pieceAssets: boardPrefs.pieceSet.assets,
-                      colorScheme: boardPrefs.boardTheme.colors,
-                      brightness: boardPrefs.effectiveBrightness(Theme.of(context).brightness),
-                      contrast: boardPrefs.contrast,
-                      hue: boardPrefs.hue,
-                      enableCoordinates: false,
-                      borderRadius: Styles.boardBorderRadius,
-                      boxShadow: boardShadows,
-                      animationDuration: const Duration(milliseconds: 150),
-                    ),
-                  ),
+                  StaticGoBoard(size: boardSize, position: position ?? GoPosition.initial(19)),
                 const SizedBox(width: 10.0),
                 if (_showLoadingPlaceholder)
                   Expanded(
@@ -146,22 +112,5 @@ class SmallBoardPreview extends ConsumerWidget {
     );
 
     return onTap != null ? InkWell(onTap: onTap, child: content) : content;
-  }
-}
-
-/// Reads a FEN from the clipboard, validates it, and sets it on [controller].
-///
-/// Shows a snackbar if the clipboard content is not a valid FEN.
-Future<void> pasteFenFromClipboard(BuildContext context, TextEditingController controller) async {
-  final data = await Clipboard.getData(Clipboard.kTextPlain);
-  if (data != null) {
-    try {
-      Chess.fromSetup(Setup.parseFen(data.text!.trim()));
-      controller.text = data.text!.trim();
-    } catch (_) {
-      if (context.mounted) {
-        showSnackBar(context, context.l10n.invalidFen, type: SnackBarType.error);
-      }
-    }
   }
 }

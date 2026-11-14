@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
@@ -9,10 +8,7 @@ import 'package:lichess_mobile/src/binding/binding.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/db/secure_storage.dart';
 import 'package:lichess_mobile/src/model/notifications/notifications.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
-import 'package:lichess_mobile/src/model/settings/preferences_storage.dart';
 import 'package:lichess_mobile/src/service/notification_service.dart';
-import 'package:lichess_mobile/src/utils/chessboard.dart';
 import 'package:lichess_mobile/src/utils/color_palette.dart';
 import 'package:lichess_mobile/src/utils/screen.dart';
 import 'package:lichess_mobile/src/utils/string.dart';
@@ -30,11 +26,6 @@ Future<void> initializeApp() async {
   try {
     final isFirstRun = prefs.getBool('first_run') ?? true;
 
-    if (!isFirstRun && prefs.getString(PrefCategory.board.storageKey) == null) {
-      final boardPrefs = BoardPrefs.defaults.copyWith(dimInDarkMode: false);
-      await prefs.setString(PrefCategory.board.storageKey, jsonEncode(boardPrefs.toJson()));
-    }
-
     final pInfo = await PackageInfo.fromPlatform();
     final appVersion = Version.parse(pInfo.version);
     final installedVersion = prefs.getString('installed_version');
@@ -47,12 +38,6 @@ Future<void> initializeApp() async {
       final sri = genRandomString(12);
       _logger.info('Generated new SRI: $sri');
       await SecureStorage.instance.write(key: kSRIStorageKey, value: sri);
-
-      // on android 12+ set board theme to system colors
-      if (getSystemCorePalettes() != null) {
-        final boardPrefs = BoardPrefs.defaults.copyWith(boardTheme: BoardTheme.system);
-        await prefs.setString(PrefCategory.board.storageKey, jsonEncode(boardPrefs.toJson()));
-      }
 
       _logger.info('First run initialization completed.');
     }
@@ -101,21 +86,6 @@ Future<void> initializeLocalNotifications(Locale locale) async {
       await android.createNotificationChannel(channel.androidChannel(l10n));
     }
   }
-}
-
-Future<void> preloadPieceImages() async {
-  final prefs = LichessBinding.instance.sharedPreferences;
-  final storedPrefs = prefs.getString(PrefCategory.board.storageKey);
-  BoardPrefs boardPrefs = BoardPrefs.defaults;
-  if (storedPrefs != null) {
-    try {
-      boardPrefs = BoardPrefs.fromJson(jsonDecode(storedPrefs) as Map<String, dynamic>);
-    } catch (e, st) {
-      _logger.warning('Failed to decode board preferences:', e, st);
-    }
-  }
-
-  await precachePieceImages(boardPrefs.pieceSet);
 }
 
 /// Display setup on Android.

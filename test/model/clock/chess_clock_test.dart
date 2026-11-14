@@ -1,11 +1,11 @@
 import 'package:dartchess/dartchess.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lichess_mobile/src/model/clock/chess_clock.dart';
+import 'package:lichess_mobile/src/model/clock/game_clock.dart';
 
 void main() {
   test('make clock', () {
-    final clock = ChessClock(
+    final clock = GameClock(
       whiteTime: const Duration(seconds: 5),
       blackTime: const Duration(seconds: 5),
     );
@@ -16,7 +16,7 @@ void main() {
 
   test('start clock', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -27,7 +27,7 @@ void main() {
 
   test('clock ticking', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -45,7 +45,7 @@ void main() {
 
   test('stop clock', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -65,7 +65,7 @@ void main() {
 
   test('start side', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -79,7 +79,7 @@ void main() {
 
   test('start side (running clock)', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -100,7 +100,7 @@ void main() {
 
   test('start side (running clock, same side)', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -121,7 +121,7 @@ void main() {
 
   test('start with delay', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -142,7 +142,7 @@ void main() {
 
   test('increment times', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -160,7 +160,7 @@ void main() {
 
   test('increment specific side', () {
     fakeAsync((async) {
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
       );
@@ -179,7 +179,7 @@ void main() {
   test('flag', () {
     fakeAsync((async) {
       int flagCount = 0;
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
         onFlag: () {
@@ -208,7 +208,7 @@ void main() {
   test('onEmergency', () {
     fakeAsync((async) {
       int onEmergencyCount = 0;
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 5),
         blackTime: const Duration(seconds: 5),
         emergencyThreshold: const Duration(seconds: 2),
@@ -233,7 +233,7 @@ void main() {
   test('Regression tests for issue #1626', () {
     fakeAsync((async) {
       int onEmergencyCount = 0;
-      final clock = ChessClock(
+      final clock = GameClock(
         whiteTime: const Duration(seconds: 60),
         blackTime: const Duration(seconds: 60),
         emergencyThreshold: const Duration(seconds: 30),

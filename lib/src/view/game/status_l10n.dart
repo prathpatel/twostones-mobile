@@ -1,72 +1,56 @@
-import 'package:dartchess/dartchess.dart';
 import 'package:flutter/widgets.dart';
-import 'package:lichess_mobile/src/model/common/chess.dart';
 import 'package:lichess_mobile/src/model/game/game_status.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/utils/l10n_context.dart';
 
+/// How a game stands or ended, in the language of the app.
 String gameStatusL10n(
   BuildContext context, {
-  required Variant variant,
   required GameStatus status,
-  required Position lastPosition,
+  required GoPosition lastPosition,
   Side? winner,
-  bool? isThreefoldRepetition,
 }) {
+  final l10n = context.l10n;
   switch (status) {
-    case GameStatus.started:
-      return context.l10n.playingRightNow;
+    case GameStatus.created || GameStatus.started:
+      return l10n.playingRightNow;
     case GameStatus.aborted:
-      return context.l10n.gameAborted;
-    case GameStatus.mate:
-      return context.l10n.checkmate;
+      return l10n.gameAborted;
     case GameStatus.resign:
-      return winner == Side.black ? context.l10n.whiteResigned : context.l10n.blackResigned;
-    case GameStatus.stalemate:
-      return context.l10n.stalemate;
+      return winner == Side.black ? l10n.whiteResigned : l10n.blackResigned;
     case GameStatus.timeout:
       return winner == null
           ? lastPosition.turn == Side.white
-                ? '${context.l10n.whiteLeftTheGame} • ${context.l10n.draw}'
-                : '${context.l10n.blackLeftTheGame} • ${context.l10n.draw}'
+                ? l10n.whiteLeftTheGame
+                : l10n.blackLeftTheGame
           : winner == Side.black
-          ? context.l10n.whiteLeftTheGame
-          : context.l10n.blackLeftTheGame;
-    case GameStatus.insufficientMaterialClaim:
-      return '${context.l10n.drawClaimed} • ${context.l10n.insufficientMaterial}';
+          ? l10n.whiteLeftTheGame
+          : l10n.blackLeftTheGame;
     case GameStatus.draw:
-      if (lastPosition.isInsufficientMaterial) {
-        return '${context.l10n.insufficientMaterial} • ${context.l10n.draw}';
-      } else if (isThreefoldRepetition == true) {
-        return '${context.l10n.threefoldRepetition} • ${context.l10n.draw}';
-      } else {
-        return context.l10n.draw;
-      }
+      return 'Jigo: both players have the same number of points';
     case GameStatus.outoftime:
       return winner == null
           ? lastPosition.turn == Side.white
-                ? '${context.l10n.whiteRanOutOfTime} • ${context.l10n.draw}'
-                : '${context.l10n.blackRanOutOfTime} • ${context.l10n.draw}'
+                ? l10n.whiteRanOutOfTime
+                : l10n.blackRanOutOfTime
           : winner == Side.black
-          ? context.l10n.whiteRanOutOfTime
-          : context.l10n.blackRanOutOfTime;
+          ? l10n.whiteRanOutOfTime
+          : l10n.blackRanOutOfTime;
     case GameStatus.noStart:
-      return winner == Side.black ? context.l10n.whiteDidntMove : context.l10n.blackDidntMove;
-    case GameStatus.unknownFinish:
-      return context.l10n.finished;
+      return winner == Side.black ? l10n.whiteDidntMove : l10n.blackDidntMove;
     case GameStatus.cheat:
-      return context.l10n.cheatDetected;
+      return l10n.cheatDetected;
     case GameStatus.variantEnd:
-      switch (variant) {
-        case Variant.kingOfTheHill:
-          return context.l10n.kingInTheCenter;
-        case Variant.racingKings:
-          return context.l10n.raceFinished;
-        case Variant.threeCheck:
-          return context.l10n.threeChecks;
-        default:
-          return context.l10n.variantEnding;
-      }
-    default:
-      return status.toString();
+      return winner == null
+          ? 'The game was counted'
+          : winner == Side.black
+          ? 'Black wins by counting'
+          : 'White wins by counting';
+    case GameStatus.mate ||
+        GameStatus.stalemate ||
+        GameStatus.insufficientMaterialClaim ||
+        GameStatus.unknownFinish ||
+        GameStatus.unknown:
+      return l10n.finished;
   }
 }

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:collection/collection.dart';
-import 'package:dartchess/dartchess.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -12,6 +11,7 @@ import 'package:lichess_mobile/src/model/game/exported_game.dart';
 import 'package:lichess_mobile/src/model/game/game_filter.dart';
 import 'package:lichess_mobile/src/model/game/game_repository.dart';
 import 'package:lichess_mobile/src/model/game/game_storage.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/model/user/game_history_preferences.dart';
 import 'package:lichess_mobile/src/model/user/user.dart';
 import 'package:lichess_mobile/src/model/user/user_repository_providers.dart';
@@ -137,7 +137,6 @@ class UserGameHistoryNotifier(final UserGameHistoryNotifierParams params)
             id,
             filter: params.filter,
             withBookmarked: true,
-            withMoves: prefs.displayMode == GameHistoryDisplayMode.detail,
           )
         : storage
               .page(userId: id, filter: params.filter)
@@ -177,7 +176,6 @@ class UserGameHistoryNotifier(final UserGameHistoryNotifierParams params)
               until: _list.last.game.createdAt,
               filter: currentVal.filter,
               withBookmarked: true,
-              withMoves: prefs.displayMode == GameHistoryDisplayMode.detail,
             )
           : currentVal.online && currentVal.authUser != null
           ? _gameRepository.getUserGames(
@@ -186,7 +184,6 @@ class UserGameHistoryNotifier(final UserGameHistoryNotifierParams params)
               until: _list.last.game.createdAt,
               filter: currentVal.filter,
               withBookmarked: true,
-              withMoves: prefs.displayMode == GameHistoryDisplayMode.detail,
             )
           : (await ref.watch(gameStorageProvider.future))
                 .page(max: _nbPerPage, until: _list.last.game.createdAt)

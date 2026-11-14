@@ -12,12 +12,8 @@ import 'package:lichess_mobile/l10n/l10n.dart';
 import 'package:lichess_mobile/src/constants.dart';
 import 'package:lichess_mobile/src/intl.dart';
 import 'package:lichess_mobile/src/model/account/account_repository.dart';
-import 'package:lichess_mobile/src/model/account/ongoing_games_notifier.dart';
 import 'package:lichess_mobile/src/model/common/preloaded_data.dart';
-import 'package:lichess_mobile/src/model/game/game_live_activity.dart';
-import 'package:lichess_mobile/src/model/settings/board_preferences.dart';
 import 'package:lichess_mobile/src/model/settings/general_preferences.dart';
-import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/service/account_service.dart';
 import 'package:lichess_mobile/src/service/announce_service.dart';
 import 'package:lichess_mobile/src/service/app_links_service.dart';
@@ -77,7 +73,7 @@ class const Application({super.key}) extends ConsumerStatefulWidget {
 
 class _AppState() extends ConsumerState<Application> {
   /// Whether the app has checked for online status for the first time.
-  bool _firstTimeOnlineCheck = false;
+  final bool _firstTimeOnlineCheck = false;
   final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
@@ -97,9 +93,6 @@ class _AppState() extends ConsumerState<Application> {
 
     if (Platform.isIOS) {
       HomeWidget.setAppGroupId(_kIosAppGroupId);
-      // No game screen is open at launch, so any game Live Activity is a leftover from a previous
-      // run (e.g. the app was killed during a game).
-      ref.read(gameLiveActivityChannelProvider).endAll();
     }
     HomeWidget.saveWidgetData<String>('lichessHost', kLichessHost);
 
@@ -113,47 +106,11 @@ class _AppState() extends ConsumerState<Application> {
           });
         }
       }, fireImmediately: true);
-      ref.listenManual(boardPreferencesProvider, (prev, state) {
-        if (prev == null ||
-            prev.boardTheme != state.boardTheme ||
-            prev.pieceSet != state.pieceSet) {
-          Future.wait([
-            HomeWidget.saveWidgetData<String>('boardTheme', state.boardTheme.name),
-            HomeWidget.saveWidgetData<String>('pieceSet', state.pieceSet.name),
-          ]).then((_) {
-            HomeWidget.updateWidget(iOSName: 'DailyPuzzleLargeWidget');
-          });
-        }
-      }, fireImmediately: true);
     }
 
     // [setupIntl] sets [Intl.defaultLocale] on startup: follow the app language from then on.
     ref.listenManual(generalPreferencesProvider.select((prefs) => prefs.locale), (_, locale) {
       Intl.defaultLocale = (locale ?? getSystemLocale(WidgetsBinding.instance)).toLanguageTag();
-    });
-
-    // Listening to the settled status rather than to [isDeviceOnlineProvider]: both actions are
-    // network calls, which must not be made on the optimistic assumption that a device whose
-    // status is not known yet is online.
-    ref.listenManual(connectivityChangesProvider, (prev, current) async {
-      // The previous state is read with [isDeviceOnlineIn], so that coming back from a check that
-      // failed — offline as far as the app is concerned — is an edge like any other.
-      final prevWasOffline = prev != null && !isDeviceOnlineIn(prev);
-      final currentIsOnline = current.value?.isOnline == true;
-
-      // Play registered moves whenever the app comes back online.
-      if (prevWasOffline && currentIsOnline) {
-        final nbMovesPlayed = await ref.read(correspondenceServiceProvider).playRegisteredMoves();
-        if (nbMovesPlayed > 0) {
-          ref.invalidate(ongoingGamesProvider);
-        }
-      }
-
-      // Perform actions once when the app comes online.
-      if (currentIsOnline && !_firstTimeOnlineCheck) {
-        _firstTimeOnlineCheck = true;
-        ref.read(correspondenceServiceProvider).syncGames();
-      }
     });
 
     super.initState();
@@ -172,14 +129,12 @@ class _AppState() extends ConsumerState<Application> {
         ),
       ),
     );
-    final boardTheme = ref.watch(boardPreferencesProvider.select((prefs) => prefs.boardTheme));
     final theme = makeAppTheme(
       context,
       themeMode: themeConfig.$1,
       backgroundColor: themeConfig.$2,
       backgroundImage: themeConfig.$3,
       systemColors: themeConfig.$4,
-      boardTheme: boardTheme,
     );
 
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
