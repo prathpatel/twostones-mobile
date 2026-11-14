@@ -44,6 +44,9 @@ String makeFullEvent(
     black: Duration(minutes: 3),
   ),
   FullEventTestCorrespondenceClock? correspondenceClock,
+
+  /// Whether the opponent of [youAre] is connected to the game.
+  bool opponentOnGame = true,
 }) {
   final positions = replayGoGame(size: boardSize, handicap: handicap, moves: moves);
   final last = positions.last;
@@ -62,7 +65,7 @@ String makeFullEvent(
       "color": "${side.name}",
       ${isAi ? '"ai": 3, "aiEngine": "KataGo",' : '"user": {"name": "$name", "id": "${name.toLowerCase()}"}, "rating": 1500,'}
       "prisoners": ${last.prisoners(side)},
-      "onGame": true
+      "onGame": ${side == pov || opponentOnGame}
 ''';
   }
 

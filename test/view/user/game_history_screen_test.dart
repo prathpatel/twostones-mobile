@@ -27,7 +27,7 @@ void main() {
           200,
         );
       }
-      if (request.url.path == '/api/games/user/testuser') {
+      if (request.url.path == '/api/mobile/games/user/testuser') {
         return mockResponse(mockUserRecentGameResponse('testUser'), 200);
       }
       return mockResponse('', 404);
@@ -56,7 +56,7 @@ void main() {
 
   testWidgets('Games are grouped by day, with their time and rating change', (tester) async {
     final mockClient = MockClient((request) {
-      if (request.url.path == '/api/games/user/testuser') {
+      if (request.url.path == '/api/mobile/games/user/testuser') {
         return mockResponse(mockUserRecentGameResponse('testUser'), 200);
       }
       return mockResponse('', 404);
@@ -92,7 +92,7 @@ void main() {
     var failing = true;
     var nbRequests = 0;
     final mockClient = MockClient((request) {
-      if (request.url.path == '/api/games/user/testuser') {
+      if (request.url.path == '/api/mobile/games/user/testuser') {
         nbRequests++;
         if (failing) {
           throw http.ClientException('Request timed out', request.url);

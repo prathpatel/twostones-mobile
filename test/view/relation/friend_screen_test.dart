@@ -189,9 +189,9 @@ void main() {
         if (request.url.path == '/api/rel/following') {
           return mockResponse(followingBody, 200);
         }
-        if (request.url.path == '/api/mobile/profile/alice') {
+        if (request.url.path == '/api/user/alice') {
           return mockResponse(
-            '{"profile":{"id":"alice","username":"Alice","createdAt":1290415680000,"seenAt":1290415680000,"perfs":{},"following":true,"followable":true}}',
+            '{"id":"alice","username":"Alice","createdAt":1290415680000,"seenAt":1290415680000,"perfs":{},"following":true,"followable":true}',
             200,
           );
         }

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/game/game_controller.dart';
+import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/network/http.dart';
 import 'package:lichess_mobile/src/view/game/game_body.dart';
 import 'package:lichess_mobile/src/view/game/game_screen.dart';
@@ -10,44 +11,30 @@ import 'package:lichess_mobile/src/view/game/game_screen_providers.dart';
 import 'package:lichess_mobile/src/widgets/bottom_bar.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../model/game/game_socket_example_data.dart';
 import '../../network/fake_websocket_channel.dart';
 import '../../test_helpers.dart';
 import '../../test_provider_scope.dart';
 
-/// A finished, clockless (correspondence) game viewed as white, with a
-/// configurable opponent `onGame` flag.
-String finishedCorrespondenceFullEvent({required bool opponentOnGame}) =>
-    '''
-{
-  "t": "full",
-  "d": {
-    "game": {
-      "id": "qVChCOTc",
-      "variant": {"key": "standard", "name": "Standard", "short": "Std"},
-      "speed": "correspondence",
-      "perf": "correspondence",
-      "rated": false,
-      "source": "lobby",
-      "status": {"id": 31, "name": "resign"},
-      "winner": "white",
-      "createdAt": 1685698678928,
-      "pgn": "e4 e5"
-    },
-    "white": {
-      "user": {"name": "Homer", "id": "homer"},
-      "rating": 1500,
-      "onGame": true
-    },
-    "black": {
-      "user": {"name": "Moe", "id": "moe"},
-      "rating": 1500,
-      "onGame": $opponentOnGame
-    },
-    "youAre": "white",
-    "socket": 0
-  }
-}
-''';
+/// A finished, clockless (correspondence) game viewed as white, with a configurable opponent
+/// `onGame` flag.
+String finishedCorrespondenceFullEvent({required bool opponentOnGame}) => makeFullEvent(
+  const GameId('qVChCOTc'),
+  const ['ee', 'cc'],
+  whiteUserName: 'Homer',
+  blackUserName: 'Moe',
+  youAre: Side.white,
+  statusId: 31,
+  statusName: 'resign',
+  winner: Side.white,
+  clock: null,
+  correspondenceClock: (
+    daysPerTurn: 3,
+    white: const Duration(days: 3),
+    black: const Duration(days: 3),
+  ),
+  opponentOnGame: opponentOnGame,
+);
 
 void main() {
   const testGameFullId = GameFullId('qVChCOTcHSeW');

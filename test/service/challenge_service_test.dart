@@ -75,7 +75,7 @@ void main() {
     await socketClient.firstConnection;
     sendServerSocketMessages(Uri(path: kDefaultSocketRoute), [
       '''
-{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
+{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
 ''',
     ]);
 
@@ -152,7 +152,7 @@ void main() {
 
       sendServerSocketMessages(Uri(path: kDefaultSocketRoute), [
         '''
-{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
+{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
 ''',
       ]);
 
@@ -162,7 +162,7 @@ void main() {
         () => notificationDisplayMock.show(
           id: const ChallengeId('H9fIRZUk').hashCode,
           title: 'Bot1 challenges you!',
-          body: 'Random side • Rated • 10+0',
+          body: 'Random side • 19×19 • Rated • 10+0',
           notificationDetails: captureAny(named: 'notificationDetails'),
           payload: any(named: 'payload'),
         ),
@@ -179,7 +179,7 @@ void main() {
 
       sendServerSocketMessages(Uri(path: kDefaultSocketRoute), [
         '''
-{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
+{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
 ''',
       ]);
 
@@ -243,7 +243,7 @@ void main() {
 
       sendServerSocketMessages(Uri(path: kDefaultSocketRoute), [
         '''
-{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
+{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
 ''',
       ]);
 
@@ -304,7 +304,7 @@ void main() {
 
       sendServerSocketMessages(Uri(path: kDefaultSocketRoute), [
         '''
-{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
+{"t": "challenges", "d": {"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "in" } ] }, "v": 0 }
 ''',
       ]);
 
@@ -370,7 +370,7 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Bot1 challenges you: Random side • Rated • 10+0'), findsOneWidget);
+      expect(find.text('Bot1 challenges you: Random side • 19×19 • Rated • 10+0'), findsOneWidget);
       expect(find.text('Accept'), findsOneWidget);
       expect(find.text('Decline'), findsOneWidget);
     }, variant: kPlatformVariant);
@@ -427,7 +427,7 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Bot1 challenges you: Random side • Casual • 5+0'), findsOneWidget);
+      expect(find.text('Bot1 challenges you: Random side • 19×19 • Casual • 5+0'), findsOneWidget);
       expect(find.text('Accept'), findsOneWidget);
       expect(find.text('Decline'), findsOneWidget);
     }, variant: kPlatformVariant);

@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:deep_pick/deep_pick.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/model/challenge/challenge.dart';
-import 'package:lichess_mobile/src/model/common/game.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/go/go.dart';
 import 'package:lichess_mobile/src/network/aggregator.dart';
@@ -38,13 +36,15 @@ class const ChallengeRepository(final LichessClient client, final Aggregator agg
     return client.readJson(uri, mapper: Challenge.fromServerJson);
   }
 
-  Future<Challenge> create(ChallengeRequest challengeReq) async {
+  Future<Challenge> create(ChallengeRequest challengeReq) {
     final uri = Uri(
       path: '/setup/friend',
       queryParameters: {if (challengeReq.destUser != null) 'user': challengeReq.destUser!.id.value},
     );
-    // The server answers with the challenge and the version of its socket.
-    final challenge = await client.postReadJson(
+    // The server answers with the challenge and the version of its socket. An open challenge
+    // (without a destination user) is accepted by whoever opens its link: the side of its creator
+    // is already in the request body.
+    return client.postReadJson(
       uri,
       headers: {'Accept': 'application/json'},
       body: challengeReq.toRequestBody,
@@ -53,19 +53,6 @@ class const ChallengeRepository(final LichessClient client, final Aggregator agg
         'socketVersion': json['socketVersion'],
       }),
     );
-
-    // The API doesn't directly allow us to create an open challenge and also join it in one step,
-    // so after having created the challenge, we immediately accept it if it's an open challenge.
-    if (challengeReq.destUser == null) {
-      final side = switch (challengeReq.sideChoice) {
-        SideChoice.white => Side.white,
-        SideChoice.black => Side.black,
-        SideChoice.random => Side.values[Random().nextInt(Side.values.length)],
-      };
-      await accept(challenge.id, side: side);
-    }
-
-    return challenge;
   }
 
   Future<void> accept(ChallengeId id, {Side? side}) async {

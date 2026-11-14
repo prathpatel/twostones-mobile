@@ -103,7 +103,7 @@ void main() {
     testWidgets('authUser, no played game: do not show welcome screen', (tester) async {
       int nbUserGamesRequests = 0;
       final mockClient = MockClient((request) {
-        if (request.url.path == '/api/games/user/testuser') {
+        if (request.url.path == '/api/mobile/games/user/testuser') {
           nbUserGamesRequests++;
           return mockResponse('', 200);
         }
@@ -169,7 +169,7 @@ void main() {
     testWidgets('authUser, with played games: shows recent games', (tester) async {
       int nbUserGamesRequests = 0;
       final mockClient = MockClient((request) {
-        if (request.url.path == '/api/games/user/testuser') {
+        if (request.url.path == '/api/mobile/games/user/testuser') {
           nbUserGamesRequests++;
           return mockResponse(mockUserRecentGameResponse('testUser'), 200);
         }

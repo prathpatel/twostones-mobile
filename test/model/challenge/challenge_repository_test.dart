@@ -45,17 +45,11 @@ void main() {
     });
 
     test('create open challenge', () async {
-      var acceptCalled = false;
       final mockClient = MockClient((request) {
-        if (request.url.path == '/api/challenge/open') {
-          return mockResponse(challenge, 200);
-        }
-
-        // When creating an open challenge, request should be immediately accepted with the chosen color.
-        if (request.url.path == '/api/challenge/H9fIRZUk/accept') {
-          expect(request.url.queryParameters['color'], equals('black'));
-          acceptCalled = true;
-          return mockResponse('', 200);
+        if (request.url.path == '/setup/friend' &&
+            request.headers['Accept'] == 'application/json') {
+          expect(request.url.queryParameters.containsKey('user'), isFalse);
+          return mockResponse('{"challenge": $challenge, "socketVersion": 3}', 200);
         }
         return mockResponse('', 404);
       });
@@ -72,16 +66,16 @@ void main() {
         ),
       );
 
-      expect(result, isA<Challenge>());
-      expect(acceptCalled, isTrue);
+      expect(result.id, const ChallengeId('H9fIRZUk'));
+      expect(result.socketVersion, 3);
     });
   });
 }
 
 const challengesList = '''
-{"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "out" } ], "out": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "out" } ] }
+{"in": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "out" } ], "out": [ { "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "out" } ] }
 ''';
 
 const challenge = '''
-{ "socketVersion": 0, "id": "H9fIRZUk", "url": "https://lichess.org/game/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "variant": { "key": "standard", "name": "Standard", "short": "Std" }, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "out" }
+{ "socketVersion": 0, "id": "H9fIRZUk", "url": "https://twostones.org/H9fIRZUk", "status": "created", "challenger": { "id": "bot1", "name": "Bot1", "rating": 1500, "title": "BOT", "provisional": true, "online": true, "lag": 4 }, "destUser": { "id": "bobby", "name": "Bobby", "rating": 1635, "title": "GM", "provisional": true, "online": true, "lag": 4 }, "size": 19, "handicap": 0, "rated": true, "speed": "rapid", "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" }, "color": "random", "finalColor": "black", "perf": { "icon": "", "name": "Rapid" }, "direction": "out" }
 ''';

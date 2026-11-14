@@ -62,7 +62,7 @@ void main() {
           200,
         );
       }
-      if (request.url.path == '/api/games/export/bookmarks') {
+      if (request.url.path == '/api/mobile/games/bookmarks') {
         return mockResponse(mockUserRecentGameResponse(fakeAuthUser.user.name), 200);
       }
       return mockResponse('', 404);

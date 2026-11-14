@@ -217,8 +217,8 @@ MockClient _makeClockMockClient() => MockClient((request) {
     return mockResponse(mockApiAccountResponse(fakeAuthUser.user.name), 200);
   }
   // challenge creation endpoint (called by GameScreen's newRealTimeChallenge)
-  if (request.url.path == '/api/challenge/${_testDestUser.id}') {
-    return mockResponse(_clockChallengeResponse, 200);
+  if (request.url.path == '/setup/friend') {
+    return mockResponse('{"challenge": $_clockChallengeResponse, "socketVersion": 0}', 200);
   }
   return mockResponse('', 404);
 });
@@ -227,8 +227,11 @@ MockClient _makeCorrespondenceMockClient() => MockClient((request) {
   if (request.url.path == '/api/account') {
     return mockResponse(mockApiAccountResponse(fakeAuthUser.user.name), 200);
   }
-  if (request.url.path == '/api/challenge/${_testDestUser.id}') {
-    return mockResponse(_correspondenceChallengeCreatedResponse, 200);
+  if (request.url.path == '/setup/friend') {
+    return mockResponse(
+      '{"challenge": $_correspondenceChallengeCreatedResponse, "socketVersion": 0}',
+      200,
+    );
   }
   return mockResponse('', 404);
 });
@@ -237,8 +240,11 @@ MockClient _makeCorrespondenceDeclinedMockClient() => MockClient((request) {
   if (request.url.path == '/api/account') {
     return mockResponse(mockApiAccountResponse(fakeAuthUser.user.name), 200);
   }
-  if (request.url.path == '/api/challenge/${_testDestUser.id}') {
-    return mockResponse(_correspondenceChallengeCreatedResponse, 200);
+  if (request.url.path == '/setup/friend') {
+    return mockResponse(
+      '{"challenge": $_correspondenceChallengeCreatedResponse, "socketVersion": 0}',
+      200,
+    );
   }
   if (request.url.path == '/api/challenge/$_correspondenceChallengeId/show') {
     return mockResponse(_correspondenceChallengeDeclinedResponse, 200);
@@ -253,7 +259,7 @@ const _clockChallengeResponse =
 {
   "socketVersion": 0,
   "id": "$_clockChallengeId",
-  "url": "https://lichess.org/game/$_clockChallengeId",
+  "url": "https://twostones.org/$_clockChallengeId",
   "status": "created",
   "challenger": {
     "id": "testuser",
@@ -271,7 +277,7 @@ const _clockChallengeResponse =
     "online": true,
     "lag": 4
   },
-  "variant": { "key": "standard", "name": "Standard", "short": "Std" },
+  "size": 19, "handicap": 0,
   "rated": true,
   "speed": "rapid",
   "timeControl": { "type": "clock", "limit": 600, "increment": 0, "show": "10+0" },
@@ -285,7 +291,7 @@ const _correspondenceChallengeCreatedResponse =
 {
   "socketVersion": 0,
   "id": "$_correspondenceChallengeId",
-  "url": "https://lichess.org/game/$_correspondenceChallengeId",
+  "url": "https://twostones.org/$_correspondenceChallengeId",
   "status": "created",
   "challenger": {
     "id": "testuser",
@@ -303,7 +309,7 @@ const _correspondenceChallengeCreatedResponse =
     "online": true,
     "lag": 4
   },
-  "variant": { "key": "standard", "name": "Standard", "short": "Std" },
+  "size": 19, "handicap": 0,
   "rated": false,
   "speed": "correspondence",
   "timeControl": { "type": "correspondence", "daysPerTurn": 3 },
@@ -317,7 +323,7 @@ const _correspondenceChallengeDeclinedResponse =
 {
   "socketVersion": 1,
   "id": "$_correspondenceChallengeId",
-  "url": "https://lichess.org/game/$_correspondenceChallengeId",
+  "url": "https://twostones.org/$_correspondenceChallengeId",
   "status": "declined",
   "challenger": {
     "id": "testuser",
@@ -335,7 +341,7 @@ const _correspondenceChallengeDeclinedResponse =
     "online": true,
     "lag": 4
   },
-  "variant": { "key": "standard", "name": "Standard", "short": "Std" },
+  "size": 19, "handicap": 0,
   "rated": false,
   "speed": "correspondence",
   "timeControl": { "type": "correspondence", "daysPerTurn": 3 },

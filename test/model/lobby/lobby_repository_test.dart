@@ -28,40 +28,15 @@ void main() {
       expect(data, isA<IList<CorrespondenceSeek>>());
       expect(data.length, 2);
       expect(data[0].id, const GameId('OIBZi6bn'));
+      expect(data[0].boardSize, 19);
+      expect(data[1].rated, isTrue);
     });
   });
 }
 
 const seeksResponse = '''
 [
-    {
-        "color": "black",
-        "id": "OIBZi6bn",
-        "mode": 0,
-        "perf": {
-            "key": "chess960"
-        },
-        "provisional": true,
-        "rating": 1500,
-        "username": "veloce",
-        "variant": {
-            "key": "chess960"
-        }
-    },
-    {
-        "color": "",
-        "days": 5,
-        "id": "48DixX1Z",
-        "mode": 0,
-        "perf": {
-            "key": "correspondence"
-        },
-        "provisional": true,
-        "rating": 1500,
-        "username": "chabrot",
-        "variant": {
-            "key": "standard"
-        }
-    }
+  {"id": "OIBZi6bn", "username": "veloce", "rating": 1500, "size": 19, "perf": {"key": "correspondence"}, "mode": 0, "days": 3, "provisional": true},
+  {"id": "48DixX1Z", "username": "chabrot", "rating": 1620, "size": 9, "perf": {"key": "correspondence"}, "mode": 1, "days": 5}
 ]
 ''';
